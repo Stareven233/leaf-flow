@@ -1,0 +1,350 @@
+name: 基础项目演示
+desc: 展示可用的输入组件类型、leaf特性
+
+meta:
+  name: Leaf-flow
+  version: 1.0.1
+  mmap_python_dir: ./scripts/.venv
+  mmap_python:
+    dtype: file
+    method: select|resolve
+    value: ./scripts/.venv
+
+modules:
+  - key: string-input
+    name: 字符串输入演示
+    desc: 演示 string 类型的各种输入方式
+    template: 'echo "基础字符串: #{basic_string}; 字符串数组: [#{array_string}]; 下拉选择: #{select_string}; 单选按钮: #{radio_string}; 多选按钮: #{multi_radio_string}"'
+    arguments:
+      - key: basic_string
+        name: 基础字符串
+        desc: 使用文本框输入任意字符串
+        dtype: string
+        value: 你好 Leaf
+
+      - key: array_string
+        name: 字符串数组输入
+        desc: 输入多个字符串
+        dtype: string
+        value: junna
+        multiple: true
+        template: "#{#{}, }"
+
+      # 顺序变动会影响 dynamic-bind 的演示
+      - key: select_string
+        name: 下拉选择
+        desc: 从下拉列表中选择一个选项
+        dtype: string
+        method: select
+        value: 柑橘
+        options:
+          - 小雪
+          - 柑橘
+          - 香草
+          - 可笑
+
+      - key: radio_string
+        name: 单选按钮
+        desc: 使用单选按钮选择
+        dtype: string
+        method: radio
+        value: 柑橘
+        options: [柑橘, 苹果, 香蕉]
+
+      - key: multi_radio_string
+        name: 多选按钮
+        desc: 使用多选按钮选择
+        dtype: string
+        method: radio
+        value: [柑橘, 草莓]
+        options: [柑橘, 苹果, 草莓, 香蕉]
+        template: "[#{#{}}{, }]"
+        multiple: true
+        required: true
+
+  - key: number-input
+    name: 数字输入演示
+    desc: 演示 number 类型的各种输入方式
+    template: 'echo "基础数字: #{basic_number}; 数字数组: [#{array_number}] 滑块: #{slider_number}; 数字下拉: #{select_number}; 数字单选: #{radio_number}"'
+    arguments:
+      - key: basic_number
+        name: 基础数字输入
+        desc: 直接输入数字
+        dtype: number
+        value: 42
+        min: 0
+        max: 100
+        required: true
+
+      - key: array_number
+        name: 数字数组输入
+        desc: 输入多个数字
+        dtype: number
+        value: 26
+        multiple: true
+        min: 0
+        max: 100
+        template: "#{#{}, }"
+        required: true
+
+      - key: slider_number
+        name: 滑块选择
+        desc: 使用滑块选择数值
+        dtype: number
+        method: slide
+        value: 50
+        min: 0
+        max: 100
+        step: 5
+        required: true
+
+      - key: select_number
+        name: 数字下拉
+        desc: 从下拉列表选择数字
+        dtype: number
+        method: select
+        value: 30
+        options: [10, 20, 30, 40, 50, 66, 113, 512]
+        required: true
+
+      - key: radio_number
+        name: 数字单选
+        desc: 使用单选按钮选择数字
+        dtype: number
+        method: radio
+        value: 514
+        options: [114, 514, 1919, 810]
+        required: true
+
+  - key: boolean-input
+    name: 布尔值输入演示
+    desc: 演示 boolean 类型的各种输入方式
+    template:
+      - 'echo "布尔单选: #{radio_bool}"; echo "布尔开关: #{switch_bool}; 布尔数组: [#{array_bool}]"'
+    arguments:
+      - key: radio_bool
+        name: 单选框
+        desc: 使用单选按钮选择 true/false
+        dtype: boolean
+        method: radio
+        value: true
+
+      - key: switch_bool
+        name: 单选开关
+        desc: 使用开关切换 true/false
+        dtype: boolean
+        method: switch
+        value: false
+
+      - key: array_bool
+        name: 布尔数组输入
+        desc: 输入多个布尔值
+        dtype: boolean
+        method: radio
+        multiple: true
+        value: false
+        template: "#{#{}, }"
+
+  - key: path-input
+    name: 路径输入演示
+    desc: 演示文件和目录路径输入
+    template:
+      - 'echo "单个文件: #{single_file}"'
+      - 'echo "多个文件: #{ #{multiple_files}}"'
+      - 'echo "目录路径: #{directory}"'
+      - 'echo "多个目录: #{ #{multiple_dirs}}"'
+      - 'echo "使用内存映射: #{mmap_file}"'
+    arguments:
+      - key: single_file
+        name: 单个文件
+        desc: 选择一个文件
+        dtype: file
+        value: ""
+        dir: "."
+
+      - key: multiple_files
+        name: 多个文件
+        desc: 选择多个文件
+        dtype: file
+        multiple: true
+        value: []
+
+      - key: directory
+        name: 目录路径
+        desc: 选择一个目录
+        dtype: directory
+        value: ""
+        dir: ".."
+
+      - key: multiple_dirs
+        name: 多个目录
+        desc: 选择多个目录
+        dtype: directory
+        multiple: true
+        value: []
+
+      - key: mmap_file
+        name: 内存映射
+        desc: 使用内存映射
+        method: mmap
+        dtype: file
+
+  - key: required-input
+    name: 必填输入演示
+    desc: 当参数必填却未赋值则弹窗提示，且无法生成命令
+    template:
+      - 'echo "数字: <#{int}>; 字符串: <#{str}>; 布尔: <#{bool}>; 文件: <#{file}>; 目录: <#{dir}>;"'
+    arguments:
+      - key: int
+        name: 数字
+        desc: 数字
+        dtype: number
+        value: 0
+        required: true
+
+      - key: str
+        name: 字符串
+        desc: 字符串
+        dtype: string
+        value: ""
+        required: true
+
+      - key: bool
+        name: 布尔
+        desc: 布尔
+        dtype: boolean
+        value: false
+        required: true
+
+      - key: file
+        name: 文件
+        desc: 文件
+        dtype: file
+        value: ""
+        dir: "."
+        required: true
+
+      - key: dir
+        name: 目录
+        desc: 目录
+        dtype: directory
+        value: ""
+        dir: "."
+        required: true
+
+  - key: markdown-desc
+    name: markdown渲染
+    desc: |
+      # 一级标题
+      ## 二级标题
+      ### 三级标题
+
+      这是一段普通文本，包含 **粗体文字** 和 *斜体文字*。
+      使用 ~~删除线~~。     
+      诶，双空格换行
+
+
+      这是 `行内代码` 的示例。
+
+      ---
+
+      > 这是一段引用文字
+      > 可以用来强调重要内容
+
+      这是一个 [链接示例](https://example.com)。
+
+      无序列表：
+      - 第一项
+      - 第二项
+      - 第三项
+
+      有序列表：
+      1. 步骤一
+      2. 步骤二
+      3. 步骤三
+
+      代码块示例：
+      ```javascript
+      function hello() {
+        console.log("Hello World");
+      }
+      ```
+
+  - key: dynamic-bind
+    name: 动态绑定演示
+    desc: |
+      核心字段`dynamicBind`，每个动态绑定都包含 `from`, `fromRule`, `to` 三个属性。  
+
+      `from` 指定数据源  
+      - url: http://... 或 https://...
+      - 本地文件路径（目前支持json/yaml）: /path/to/file 或 ./relative/path
+      - 本模块直接引用参数属性: #{argumentKey.srcAttr}
+      - 本模块间接引用参数属性（其值作为url/path）: #{{argumentKey.srcAttr}}
+
+      `fromRule` 可选。从数据源对象提取最终值的键路径，支持`lodash.get`路径语法，如 "animal.rabbit"、"models[0].name"    
+      `to` 本模块目标参数属性，格式: "argumentKey.destAttr"，如 "model.options"   
+      **注**：动态绑定引起的参数属性值变动不会触发新的动态绑定，自然也没有循环赋值的风险
+    template: 'echo "多选按钮: #{bind-multi-radio}; 下拉选择: #{bind-select}"'
+    dynamicBind:
+      - from: ./bud/leaf/demo.yaml
+        fromRule: modules[0].arguments[2].options
+        to: bind-multi-radio.options
+      - from: '#{bind-multi-radio.value}'
+        fromRule: ~
+        to: bind-select.options
+
+    arguments:
+      - key: bind-multi-radio
+        name: 多选按钮
+        desc: 选项绑定自本配置文件string-input模块select_string参数options的多选按钮
+        dtype: string
+        method: radio
+        value: ~
+        template: "[#{#{}}{, }]"
+        options: ~
+        multiple: true
+
+      - key: bind-select
+        name: 下拉选择
+        desc: 从下拉列表中选择一个选项，选项来自于多选按钮的选择
+        dtype: string
+        method: select
+        value: 柑橘
+        options: ~
+
+  - key: other-features
+    name: 其他特性演示
+    desc: 演示参数模板、meta引用等高级功能
+    shell: auto
+    template:
+      - 'echo "使用meta: #{name}; 覆盖meta的版本: #{version}; #{optional_flag}"'
+      - 'echo "数组1: [ #{p#{items}q, }]; 数组2: [#{「#{names}」}{->}]"'
+      - 'echo "raw1 ##{raw}; raw2 [##{「##{names}」}{->}]"'
+      - "##{##{names}}"
+    arguments:
+      - key: version
+        name: 版本
+        desc: 覆盖 meta 的值
+        dtype: string
+        value: "1.9.4+0"
+
+      - key: optional_flag
+        name: 可选标志
+        desc: 参数模板实现可选参数
+        dtype: boolean
+        value: true
+        template: "--启用标志; "
+
+      - key: items
+        name: 项目列表
+        desc: 数组之前后缀
+        dtype: string
+        multiple: true
+        value: [早, 知, 道]
+
+      - key: names
+        name: 姓名列表
+        desc: 数组之分隔符
+        dtype: string
+        multiple: true
+        value: ["希实香", "柘榴", "卓司"]

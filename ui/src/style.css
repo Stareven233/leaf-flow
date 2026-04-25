@@ -1,0 +1,96 @@
+@import 'tailwindcss';
+
+@layer base {
+  :root {
+    --primary: oklch(73.087% 0.20225 149.4);
+    /* #05df72 绿色主色 */
+    --primary-hover: oklch(74.813% 0.18363 152.049);
+    /* #8AF2A5 绿色悬停 */
+    --secondary: #ffbb3b;
+    /* #ffa347 橙色辅色 */
+    --secondary-hover: #ffe49ccc;
+    /* #fafafa */
+    --foreground: hsl(0 0% 15%);
+    /* #262626 */
+    --muted: hsl(0 0% 96%);
+    --muted-foreground: hsl(0 0% 45%);
+    --border: hsl(0 0% 90%);
+    --input: hsl(0 0% 90%);
+    --ring: hsl(142 88% 55%);
+    --radius: 0.5rem;
+  }
+}
+
+/* 隐藏滚动条（保留滚动功能） */
+@layer utilities {
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+    /* Chrome/Safari/Edge */
+  }
+
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    /* IE/Edge */
+    scrollbar-width: none;
+    /* Firefox */
+  }
+}
+
+/* 自定义简洁滚动条样式 */
+@layer utilities {
+  .nscroll-bar {
+    scrollbar-width: thin;
+  }
+
+  .nscroll-bar::-webkit-scrollbar {
+    width: 3px;
+  }
+}
+
+/* 选中文本背景颜色 */
+::selection {
+  background-color: var(--secondary-hover);
+  color: black;
+}
+
+/* 只改根滚动条 */
+html {
+  scrollbar-gutter: stable;
+  scrollbar-width: auto;
+  scrollbar-color: #cbd5e1 transparent;
+}
+
+html::-webkit-scrollbar {
+  width: 6px;
+}
+
+html::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+html::-webkit-scrollbar-thumb {
+  background-color: #cbd5e1;
+  border-radius: 3px;
+}
+
+html::-webkit-scrollbar-thumb:hover {
+  background-color: #94a3b8;
+}
+
+.global-logs-terminal .xterm {
+  height: 100%;
+}
+
+.global-logs-terminal .xterm-viewport {
+  scrollbar-width: thin;
+  scrollbar-color: #475569 transparent;
+}
+
+.global-logs-terminal .xterm-viewport::-webkit-scrollbar {
+  width: 6px;
+}
+
+.global-logs-terminal .xterm-viewport::-webkit-scrollbar-thumb {
+  background-color: #475569;
+  border-radius: 999px;
+}

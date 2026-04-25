@@ -1,0 +1,104 @@
+name: 基础流演示
+desc: 展示 Flow 的特性，例如模块引用、参数覆盖、mmap 数据传递
+
+meta:
+  name: demo-flow
+  environment: preview
+
+branches:
+  - key: basic-reference
+    name: 基础引用分支
+    desc: 演示如何引用 Project 中的 Module
+    modules:
+      - key: demo.string-input
+        # 直接引用 demo 项目的 string-input 模块，使用原始配置
+
+      - key: demo.number-input
+        # 引用并覆盖部分参数
+        arguments:
+          - key: basic_number
+            min: 90
+          - key: slider_number
+            max: 66
+
+  - key: override
+    name: 参数覆盖分支
+    desc: 演示如何覆盖引用模块的参数和模板
+    meta:
+      custom_message: '这是分支级别的 meta'
+    modules:
+      - key: demo.boolean-input
+        name: 自定义布尔输入
+        desc: 覆盖了原模块的名称和描述
+        template: 'echo "覆盖后的模板<Radio: #{radio_bool}, Switch: #{switch_bool}>"'
+        arguments:
+          - key: radio_bool
+            method: switch
+            value: false
+          - key: switch_bool
+            method: radio
+            value: true
+
+      - key: demo.other-features
+        arguments:
+          - key: name
+            name: 新参数name
+            desc: 新参数name
+            value: ~flow~
+          - key: optional_flag
+            name: 可选标志
+            value: false
+
+  - key: mmap-demo
+    name: MMAP 数据传递
+    desc: 演示通过 mmap 在模块间传递数据，需要注意的是
+    modules:
+      - key: mmap-write
+        name: 写入mmap
+        desc: 测试输出
+        shell: ps
+        template: 'cd #{mmap_python_dir} ; uv run test_mmap.py write #{file} #{message}'
+        arguments:
+          - key: file
+            name: 文件
+            desc: 将消息写入mmap
+            dtype: file
+            method: mmap
+            required: true
+
+          - key: message
+            name: 消息内容
+            desc: 请写入的消息
+            dtype: string
+            required: true
+            value: klx4001
+
+      - key: mmap-read
+        name: 读取mmap
+        desc: 测试输入
+        shell: ps
+        template: 'cd #{mmap_python_dir} ; uv run test_mmap.py read #{file}'
+        arguments:
+          - key: file
+            name: 文件
+            desc: 输入文件（来自mmap）
+            dtype: file
+            method: mmap
+            required: true
+
+  - key: dynamic-bind-demo
+    name: 动态绑定演示
+    desc: 测试继承模块原有动态绑定，并为分支内模块新增动态绑定
+    modules:
+      - key: demo.dynamic-bind
+        name: 继承原有动态绑定
+
+      - key: demo.dynamic-bind
+        name: 新增动态绑定
+        dynamicBind:
+          - from: ./bud/leaf/demo.yaml
+            fromRule: modules[0].arguments[3].options
+            to: bind-multi-radio.options
+          - from: '#{bind-multi-radio.value}'
+            fromRule: ~
+            to: bind-select.options

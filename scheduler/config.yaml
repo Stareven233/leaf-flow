@@ -1,0 +1,15 @@
+isDev: true
+version: 0.9.4+2
+host: localhost
+port: 23334
+# 相对于leaf.exe
+uiDir: ../ui
+budDir: ../bud
+openBrowser: true
+# 进度条采样时间间隔（秒），0即无间隔
+progressSampleGap: 0.5
+mmapMarker: ?MMAP_FILE?
+# mmap文件大小，单位MB（目前mmap文件由各子进程自己维护）
+mmapSize: 4
+# 设置则启用日志功能
+# logDir: ./temp/log
