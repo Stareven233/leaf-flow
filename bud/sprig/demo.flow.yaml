@@ -4,6 +4,10 @@ desc: 展示 Flow 的特性，例如模块引用、参数覆盖、mmap 数据传
 meta:
   name: demo-flow
   environment: preview
+  mmap_python_dir:
+    dtype: directory
+    method: select|resolve
+    value: ./scripts/test
 
 branches:
   - key: basic-reference
@@ -71,7 +75,7 @@ branches:
             desc: 待写入的消息
             dtype: string
             required: true
-            value: klx4001
+            value: 柑橘
 
       - key: mmap-read
         name: 读取mmap

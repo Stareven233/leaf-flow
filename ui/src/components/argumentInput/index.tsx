@@ -21,26 +21,20 @@ export const getComponent = (
   dtype?: ArgumentDType,
   method?: ArgumentMethod,
 ): Component<ArgumentInputProps> => {
+  if (dtype === 'file' || dtype === 'directory') {
+    return PathInput
+  }
+  switch (method || '') {
+    case 'select':
+      return SelectInput
+    case 'radio':
+      return RadioInput
+  }
   switch (dtype || 'string') {
-    case 'file':
-    case 'directory':
-      return PathInput
     case 'string':
-      if (method === 'select') {
-        return SelectInput
-      } else if (method === 'radio') {
-        return RadioInput
-      }
       return StringInput
     case 'number':
-      if (method === 'select') {
-        return SelectInput
-      } else if (method === 'slide') {
-        return SliderInput
-      } else if (method === 'radio') {
-        return RadioInput
-      }
-      return NumberInput
+      return method === 'slide' ? SliderInput : NumberInput
     case 'boolean':
       return method === 'switch' ? SwitchInput : BooleanInput
     default:
