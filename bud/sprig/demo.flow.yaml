@@ -68,7 +68,7 @@ branches:
 
           - key: message
             name: 消息内容
-            desc: 请写入的消息
+            desc: 待写入的消息
             dtype: string
             required: true
             value: klx4001

@@ -11,6 +11,12 @@ meta:
     value: ./scripts/.venv
 
 modules:
+  - key: 最小示例
+    template: 'echo "你好: #{name}"'
+    arguments:
+      - key: name
+        name: 姓名
+        value: Leaf²
   - key: string-input
     name: 字符串输入演示
     desc: 演示 string 类型的各种输入方式
