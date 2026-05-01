@@ -1,5 +1,5 @@
 isDev: true
-version: 0.9.4+4
+version: 0.9.4+9
 host: localhost
 port: 23334
 # 相对于leaf.exe

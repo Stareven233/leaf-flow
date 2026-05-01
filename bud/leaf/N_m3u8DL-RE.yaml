@@ -1,0 +1,308 @@
+name: N_m3u8DL-RE 视频下载助手
+desc: 跨平台的DASH/HLS/MSS下载工具。支持点播、直播(DASH/HLS)。
+meta:
+  exe: D:/Software/N_m3u8DL/N_m3u8DL-RE.exe
+  github: https://github.com/nilaoda/N_m3u8DL-RE
+modules:
+  - key: download
+    name: 下载
+    desc: 通过链接/文件下载并合并（可选跳过下载/合并）
+    shell: pty:no
+    template: '#{exe}
+      "#{input}"#{tmpDir}#{saveDir}#{saveName}#{savePattern}#{baseUrl}#{threadCount}#{muxAfterDone}#{downloadRetryCount}#{httpRequestTimeout}#{forceAnsiConsole}#{noAnsiColor}#{autoSelect}#{skipMerge}#{skipDownload}#{checkSegmentsCount}#{binaryMerge}#{useFfmpegConcatDemuxer}#{delAfterDone}#{noDateInfo}#{noLog}#{concurrentDownload}#{headers}#{subOnly}#{subFormat}#{autoSubtitleFix}#{ffmpegBinaryPath}#{maxSpeed}#{useSystemProxy}#{customProxy}#{selectVideo}#{selectAudio}#{selectSubtitle}#{dropVideo}#{dropAudio}#{dropSubtitle}'
+    arguments:
+      - key: input
+        name: 输入
+        desc: 链接或文件
+        dtype: string
+        method: input
+        required: true
+        value: ""
+      - key: saveDir
+        name: 输出目录
+        dtype: directory
+        method: select|resolve
+        template: ' --save-dir "#{}"'
+        required: true
+        value: D:/t
+      - key: tmpDir
+        name: 临时目录
+        dtype: directory
+        method: select|resolve
+        required: false
+        template: ' --tmp-dir "#{}"'
+        value: D:/t
+        dir: "D:"
+      - key: saveName
+        name: 保存文件名
+        dtype: string
+        method: input
+        required: false
+        template: ' --save-name "#{}"'
+      - key: savePattern
+        name: 保存命名模板（pattern）
+        desc: "示例: <SaveName>_<Resolution>_<Bandwidth>"
+        dtype: string
+        method: input
+        required: false
+        template: ' --save-pattern "#{}"'
+      - key: autoSelect
+        name: 自动选择最佳轨道
+        dtype: boolean
+        method: switch
+        value: false
+        required: false
+        template: " --auto-select"
+      - key: skipMerge
+        name: 跳过合并
+        dtype: boolean
+        method: switch
+        value: false
+        required: false
+        template: " --skip-merge"
+      - key: skipDownload
+        name: 跳过下载
+        dtype: boolean
+        method: switch
+        value: false
+        required: false
+        template: " --skip-download"
+      - key: muxAfterDone
+        name: 混流音视频
+        desc: >
+          所有工作完成时尝试混流分离的音视频. 你能够以:分隔形式指定如下参数: * format=FORMAT: 指定混流容器 mkv, mp4,
+          ts * muxer=MUXER: 指定混流程序 ffmpeg, mkvmerge (默认: ffmpeg) *
+          bin_path=PATH: 指定程序路径 (默认: 自动寻找) * skip_sub=BOOL: 是否忽略字幕文件 (默认: false)
+          * keep=BOOL: 混流完成是否保留文件 true, false (默认: false)
+
+          例如: # 混流为mp4容器 -M format=mp4 # 使用mkvmerge, 自动寻找程序 -M
+          format=mkv:muxer=mkvmerge # 使用mkvmerge, 自定义程序路径 -M
+          format=mkv:muxer=mkvmerge:bin_path="C\:\Program
+          Files\MKVToolNix\mkvmerge.exe"
+        dtype: string
+        value: format=mp4
+        required: false
+        template: " --mux-after-done #{}"
+      - key: delAfterDone
+        name: 完成后删除临时文件
+        dtype: boolean
+        method: switch
+        value: true
+        required: false
+        template: " --del-after-done"
+      - key: ffmpegBinaryPath
+        name: ffmpeg路径
+        dtype: file
+        method: select
+        required: false
+        template: ' --ffmpeg-binary-path "#{}"'
+      - key: maxSpeed
+        name: 限速（如 15M / 100K）
+        dtype: string
+        method: input
+        required: false
+        template: " --max-speed #{}"
+      - key: useSystemProxy
+        name: 使用系统代理
+        dtype: boolean
+        method: switch
+        value: true
+        required: false
+        template: " --use-system-proxy"
+      - key: customProxy
+        name: 自定义代理URL
+        desc: "示例: http://127.0.0.1:8888"
+        dtype: string
+        method: input
+        required: false
+        template: ' --custom-proxy "#{}"'
+      - key: baseUrl
+        name: BaseURL
+        dtype: string
+        method: input
+        required: false
+        template: ' --base-url "#{}"'
+      - key: threadCount
+        name: 下载线程数
+        dtype: number
+        method: slide
+        min: 1
+        max: 128
+        step: 1
+        value: 4
+        required: false
+        template: " --thread-count #{}"
+      - key: downloadRetryCount
+        name: 分片重试次数
+        dtype: number
+        method: slide
+        min: 0
+        max: 50
+        step: 1
+        value: 3
+        required: false
+        template: " --download-retry-count #{}"
+      - key: httpRequestTimeout
+        name: HTTP超时（秒）
+        dtype: number
+        method: slide
+        min: 1
+        max: 600
+        step: 1
+        value: 100
+        required: false
+        template: " --http-request-timeout #{}"
+      - key: forceAnsiConsole
+        name: 强制ANSI控制台
+        dtype: boolean
+        method: switch
+        value: false
+        required: false
+        template: " --force-ansi-console"
+      - key: noAnsiColor
+        name: 禁用ANSI颜色
+        dtype: boolean
+        method: switch
+        value: false
+        required: false
+        template: " --no-ansi-color"
+      - key: checkSegmentsCount
+        name: 校验分片数量（匹配预期）
+        dtype: boolean
+        method: switch
+        value: true
+        required: false
+        template: " --check-segments-count"
+      - key: useFfmpegConcatDemuxer
+        name: ffmpeg使用concat demuxer
+        dtype: boolean
+        method: switch
+        value: false
+        required: false
+        template: " --use-ffmpeg-concat-demuxer"
+      - key: noDateInfo
+        name: 混流不写入日期信息
+        dtype: boolean
+        method: switch
+        value: false
+        required: false
+        template: " --no-date-info"
+      - key: binaryMerge
+        name: 二进制合并
+        dtype: boolean
+        method: switch
+        value: false
+        required: false
+        template: " --binary-merge"
+      - key: noLog
+        name: 关闭日志文件输出
+        dtype: boolean
+        method: switch
+        value: true
+        required: false
+        template: " --no-log"
+      - key: logFilePath
+        name: 日志文件路径
+        dtype: file
+        method: select
+        required: false
+        template: ' --log-file-path "#{}"'
+      - key: concurrentDownload
+        name: 并发下载音/视/字
+        dtype: boolean
+        method: switch
+        value: false
+        required: false
+        template: " --concurrent-download"
+      - key: headers
+        name: HTTP Header（可多条）
+        desc: "示例：Cookie: xxx 或 User-Agent: iOS"
+        dtype: string
+        method: input
+        multiple: true
+        required: false
+        value: []
+        template: '#{ -H "#{headers}"}'
+      - key: subOnly
+        name: 只下载字幕
+        dtype: boolean
+        method: switch
+        value: false
+        required: false
+        template: " --sub-only"
+      - key: subFormat
+        name: 字幕格式
+        dtype: string
+        method: select
+        options:
+          - SRT
+          - VTT
+        value: SRT
+        required: false
+        template: " --sub-format #{}"
+      - key: autoSubtitleFix
+        name: 自动修正字幕
+        dtype: boolean
+        method: switch
+        value: true
+        required: false
+        template: " --auto-subtitle-fix"
+      - key: selectVideo
+        name: 选择视频（正则）
+        dtype: string
+        method: input
+        required: false
+        template: ' --select-video "#{}"'
+      - key: selectAudio
+        name: 选择音频（正则）
+        dtype: string
+        method: input
+        required: false
+        template: ' --select-audio "#{}"'
+      - key: selectSubtitle
+        name: 选择字幕（正则）
+        dtype: string
+        method: input
+        required: false
+        template: ' --select-subtitle "#{}"'
+      - key: dropVideo
+        name: 去除视频（正则）
+        dtype: string
+        method: input
+        required: false
+        template: ' --drop-video "#{}"'
+      - key: dropAudio
+        name: 去除音频（正则）
+        dtype: string
+        method: input
+        required: false
+        template: ' --drop-audio "#{}"'
+      - key: dropSubtitle
+        name: 去除字幕（正则）
+        dtype: string
+        method: input
+        required: false
+        template: ' --drop-subtitle "#{}"'
+  - key: version
+    name: 查看版本
+    shell: auto
+    template: "#{exe} --version"
+    arguments: []
+  - key: help
+    name: 帮助
+    shell: auto
+    template: "#{exe} --help"
+    arguments: []
+  - key: morehelp
+    name: 详细帮助
+    desc: 输入选项名以查看该选项的详细帮助（如 select-video）
+    shell: auto
+    template: "#{exe} --morehelp #{option}"
+    arguments:
+      - key: option
+        name: 选项名
+        dtype: string
+        method: input
+        required: true
+        value: select-video
+key: N_m3u8DL-RE

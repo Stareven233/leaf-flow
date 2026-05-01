@@ -1,0 +1,415 @@
+name: MSST
+desc: |
+  基于多种模型（如 MDX、Roformer、Demucs）的音频源分离，流水线形式。  
+  [github.com/ZFTurbo/Music-Source-Separation-Training](https://github.com/ZFTurbo/Music-Source-Separation-Training)  
+  一个灵活的命令行界面，用于使用 mdx23c、scnet、bandit 等模型分离音轨（如人声/伴奏）。  
+  支持 GPU 加速、LoRA、TTA 和多格式输出。
+
+meta:
+  msst_webui_dir: &webui_dir D:/Software/MSST WebUI
+  msst_dir: ./library/msst
+  msst_config_dir: &msst_config_dir ./library/msst/configs/merged
+  python:
+    dtype: file
+    method: select|resolve
+    value: ./bin/venv-svc/Scripts/python.exe
+
+modules:
+  - key: install-uv
+    name: 安装依赖(uv)
+    desc: |
+      完全使用 uv 安装必须的python虚拟环境，位于 `./bin/venv-svc`  
+      省心但是pytorch很大，而且直连官方源很慢，下载可能非常久  
+      注： 要求nvidia显卡（GTX 10系列 (Pascal) 以上），且通常需要升级到**最新版驱动**。
+      GTX 10系列以及**更早的显卡**需使用**CUDA 12.6的pytorch**，执行本模块之前需手动将 `library/msst/pyproject.toml` 里的cu130修改为cu126，并重新执行 `uv lock`
+      ——> 不如用 `安装依赖(pip)` 模块安装
+    shell: ps
+    template:
+      - '& #{uv} venv "#{venv}"#{clear}'
+      - '$env:UV_PROJECT_ENVIRONMENT = "#{venv}"'
+      - '$env:UV_CACHE_DIR="#{temp}/uv-cache"'
+      - '& #{uv} sync'
+    arguments:
+      - key: uv
+        name: uv路径
+        desc: uv可执行程序路径
+        dtype: file
+        method: select|resolve
+        value: ./bin/uv/uv.exe
+        template: '"#{}" --directory "#{msst_dir}"'
+        required: true
+
+      - key: venv
+        name: venv目录
+        desc: python虚拟环境目录
+        dtype: directory
+        method: select|resolve
+        value: ./bin/venv-svc
+        required: true
+
+      - key: temp
+        name: 临时目录
+        desc: wheel下载临时目录
+        dtype: directory
+        method: select|resolve
+        value: ./temp
+        required: true
+
+      - key: clear
+        name: 重装环境
+        desc: 清空已有的同名虚拟环境，并重新安装
+        dtype: boolean
+        value: false
+        template: ' --clear'
+
+  - key: install-pip
+    name: 安装依赖(pip)
+    desc: |
+      使用 uv 创建虚拟环境，之后用pip+wheel安装必须的python虚拟环境，位于 `./bin/venv-svc`  
+      pytorch三件套采用 [阿里云镜像](https://mirrors.aliyun.com/pytorch-wheels/cu130/)，理论上会快不少   
+      如果下载中断/出错/安装失败可以自行下载 
+      [torch](https://mirrors.aliyun.com/pytorch-wheels/cu130/torch-2.11.0+cu130-cp312-cp312-win_amd64.whl),
+      [torchaudio](https://mirrors.aliyun.com/pytorch-wheels/cu130/torchaudio-2.11.0+cu130-cp312-cp312-win_amd64.whl),
+      [torchvision](https://mirrors.aliyun.com/pytorch-wheels/cu130/torchvision-0.26.0+cu130-cp312-cp312-win_amd64.whl) 
+      放到 `leaf_dir/temp` 里面，然后再执行本模块  
+      注： 要求nvidia显卡（GTX 10系列 (Pascal) 以上），且通常需要升级到**最新版驱动**。
+      GTX 10系列以及**更早的显卡**需将cuda版本参数设置为**cu126**再执行本模块
+    shell: ps
+    template:
+      - '$env:UV_CACHE_DIR="#{temp}/uv-cache"'
+      - '& #{uv} venv "#{venv}"#{clear}'
+      # - 'Invoke-WebRequest -Uri "https://mirrors.aliyun.com/pytorch-wheels/#{cu}/torch-2.11.0+#{cu}-cp312-cp312-win_amd64.whl" -OutFile "#{temp}/torch-2.11.0+#{cu}-cp312-cp312-win_amd64.whl"'
+      # - 'Invoke-WebRequest -Uri "https://mirrors.aliyun.com/pytorch-wheels/#{cu}/torchaudio-2.11.0+#{cu}-cp312-cp312-win_amd64.whl" -OutFile "#{temp}/torchaudio-2.11.0+#{cu}-cp312-cp312-win_amd64.whl"'
+      # - 'Invoke-WebRequest -Uri "https://mirrors.aliyun.com/pytorch-wheels/#{cu}/torchvision-0.26.0+#{cu}-cp312-cp312-win_amd64.whl" -OutFile "#{temp}/torchvision-0.26.0+#{cu}-cp312-cp312-win_amd64.whl"'
+      # - '$wc = New-Object System.Net.WebClient'
+      # - '$wc.Headers.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36")'
+      - '$torch = "#{temp}/torch-2.11.0+#{cu}-cp312-cp312-win_amd64.whl"'
+      - '$torcha = "#{temp}/torchaudio-2.11.0+#{cu}-cp312-cp312-win_amd64.whl"'
+      - '$torchv = "#{temp}/torchvision-0.26.0+#{cu}-cp312-cp312-win_amd64.whl"'
+      # - 'if (-not (Test-Path $torch)) { $wc.DownloadFile("https://mirrors.aliyun.com/pytorch-wheels/#{cu}/torch-2.11.0+#{cu}-cp312-cp312-win_amd64.whl", $torch) }'
+      # - 'if (-not (Test-Path $torcha)) { $wc.DownloadFile("https://mirrors.aliyun.com/pytorch-wheels/#{cu}/torchaudio-2.11.0+#{cu}-cp312-cp312-win_amd64.whl", $torcha) }'
+      # - 'if (-not (Test-Path $torchv)) { $wc.DownloadFile("https://mirrors.aliyun.com/pytorch-wheels/#{cu}/torchvision-0.26.0+#{cu}-cp312-cp312-win_amd64.whl", $torchv) }'
+      # - '$wc.Dispose()'
+      - 'if (-not (Test-Path $torch)) { Start-BitsTransfer -Source "https://mirrors.aliyun.com/pytorch-wheels/#{cu}/torch-2.11.0+#{cu}-cp312-cp312-win_amd64.whl" -Destination $torch -DisplayName "正在下载PyTorch" }'
+      - 'if (-not (Test-Path $torcha)) { Invoke-WebRequest -Uri "https://mirrors.aliyun.com/pytorch-wheels/#{cu}/torchaudio-2.11.0+#{cu}-cp312-cp312-win_amd64.whl" -OutFile $torcha }'
+      - 'if (-not (Test-Path $torchv)) { Invoke-WebRequest -Uri "https://mirrors.aliyun.com/pytorch-wheels/#{cu}/torchvision-0.26.0+#{cu}-cp312-cp312-win_amd64.whl" -OutFile $torchv }'
+      - '& #{uv} pip install "#{temp}/torch-2.11.0+#{cu}-cp312-cp312-win_amd64.whl" --python "#{venv}/Scripts/python.exe"'
+      - '& #{uv} pip install "#{temp}/torchaudio-2.11.0+#{cu}-cp312-cp312-win_amd64.whl" --python "#{venv}/Scripts/python.exe"'
+      - '& #{uv} pip install "#{temp}/torchvision-0.26.0+#{cu}-cp312-cp312-win_amd64.whl" --python "#{venv}/Scripts/python.exe"'
+      - '& #{uv} pip install -r "requirements_msst+sov+ddsp+rift_uv.txt" --python "#{venv}/Scripts/python.exe"'
+    arguments:
+      - key: uv
+        name: uv路径
+        desc: 模型配置文件路径。若选择【模型信息注入】模块输出的配置，则无需再指定模型类型、模型权重
+        dtype: file
+        method: select|resolve
+        value: ./bin/uv/uv.exe
+        template: '"#{}" --directory "#{msst_dir}"'
+        required: true
+
+      - key: cu
+        name: cuda版本
+        desc: pytorch对应的cuda版本，GTX 10系列以及更早的显卡设置为`cu126`
+        dtype: string
+        method: radio
+        options: [cu126, cu130]
+        value: cu130
+        required: true
+
+      - key: venv
+        name: venv目录
+        desc: python虚拟环境目录
+        dtype: directory
+        method: select|resolve
+        value: ./bin/venv-svc
+        required: true
+
+      - key: temp
+        name: 临时目录
+        desc: wheel下载临时目录
+        dtype: directory
+        method: select|resolve
+        value: ./temp
+        required: true
+
+      - key: clear
+        name: 重装环境
+        desc: 清空已有的同名虚拟环境，并重新安装
+        dtype: boolean
+        value: false
+        template: ' --clear'
+
+  - key: infer
+    name: 推理
+    desc: |
+      使用可配置的模型和输出设置运行音频源分离。  
+      若选取的 config_path（配置路径） 已经注入了必须的 model_type（模型类型）、start_check_point（模型权重）  
+      就不再需要选择后面两个，可直接推理，否则三者都必选
+    template:
+      - '& "#{python}" "#{msst_dir}/inference.py" #{config_path} #{input_path} --temporary-output "#{temp-instrument}:#{temp-output}" #{model_type} #{start_check_point} #{store_dir} #{draw_spectro} #{device_ids} #{extract_instrumental} #{disable_detailed_pbar} #{force_cpu} #{use_flac} #{pcm_type} #{use_tta} #{lora_checkpoint_peft} --filename_template "#{filename_template}" #{lora_checkpoint_loralib}'
+    shell: ps
+    dynamicBind:
+      - from: '#{{config_path.value}}'
+        fromRule: training.instruments
+        to: instrument.options
+      - from: '#{{config_path.value}}'
+        fromRule: training.target_instrument
+        to: instrument.value
+    arguments:
+      - key: config_path
+        name: 配置路径
+        desc: 模型配置文件路径。若选择【模型信息注入】模块输出的配置，则无需再指定模型类型、模型权重
+        dtype: file
+        method: select
+        value: ""
+        dir: *msst_config_dir
+        template: '--config_path "#{}"'
+        required: true
+
+      - key: input_path
+        name: 输入文件/目录
+        desc: 包含待处理音频文件（混合音轨）的文件/文件夹，可多选。
+        dtype: file
+        method: select|mmap
+        multiple: true
+        dir: D:/Document/ai-sings
+        template: '--input_path #{"#{}"}{ }'
+        required: true
+
+      - key: model_type
+        name: (模型类型)
+        desc: 要使用的分离模型类型。若选择【模型信息注入】模块输出的配置，则无需再指定
+        method: select
+        value: ~
+        options: &model_types
+          - bandit
+          - bandit_v2
+          - bs_roformer
+          - htdemucs
+          - mdx23c
+          - mel_band_roformer
+          - scnet
+          - scnet_unofficial
+          - segm_models
+          - swin_upernet
+          - torchseg
+        template: '--model_type #{}'
+
+      - key: start_check_point
+        name: (模型权重)
+        desc: 从中加载权重的初始检查点。若选择【模型信息注入】模块输出的配置，则无需再指定
+        dtype: file
+        value: ~
+        dir: *webui_dir
+        template: '--start_check_point "#{}"'
+
+      - key: instrument
+        name: 输出音轨
+        desc: |
+          决定了模型输出哪些音轨被保存到本地文件  
+          默认为 `config.target_instrument` 或 `config.training.instruments`，可多选。  
+          目前不支持读取config内的值作为选项，因此必须手动确认再填入，建议选择好然后用flow
+        dtype: string
+        method: radio
+        multiple: true
+        template: '--instrument #{"#{}"}{ }'
+
+      - key: store_dir
+        name: 输出文件夹
+        desc: 保存分离音轨的目录。为空表示输出到输入文件所在文件夹
+        dtype: directory
+        method: select
+        value: ""
+        template: '--store_dir #{}'
+
+      - key: filename_template
+        name: 输出文件名模板
+        desc: |
+          输出文件名的模板。  
+          可使用 音轨{instr}, 开始时间{start_time}, 文件名{file_name}, 末层目录名{dir_name}, 模型类型{model_type}, 模型名称{model}等占位符。  
+          允许通过 '/' 指定输出目录目录下的子目录结构。  
+          注：为空表示本次不写入任何文件到磁盘
+        dtype: string
+        value: '{file_name}_{instr}'
+
+      - key: temp-instrument
+        name: 临时输出音轨
+        desc: |
+          完全就是为了flow+mmap特意创建的参数，需搭配 `独立输出音轨保存文件路径` 一起使用  
+          最终参数值格式为: 'instr:path'，例如 'vocals:/a/b.flac'，将选定音轨保存到指定的文件路径  
+          本参数负责 instr 的部分，两个值都必须存在才有效
+        dtype: string
+
+      - key: temp-output
+        name: 临时输出音轨保存文件路径
+        desc: |
+          完全就是为了flow+mmap特意创建的参数，需搭配 `独立输出音轨` 一起使用  
+          最终参数值格式为: 'instr:path'，例如 'vocals:/a/b.flac'，将选定音轨保存到指定的文件路径  
+          本参数负责 path 的部分，两个值都必须存在才有效
+        dtype: file
+        method: mmap
+
+      - key: pcm_type
+        name: FLAC位深度
+        desc: FLAC 输出使用的脉冲编码调制位深度。选择FLOAT则使用WAV
+        method: radio
+        value: PCM_24
+        options:
+          - PCM_16
+          - PCM_24
+          - FLOAT
+        template: '--pcm_type #{}'
+
+      - key: extract_instrumental
+        name: 抽取伴奏（instrumental）
+        desc: 若指定，则从原输出中减掉人声音轨（不存在则取输出中第一个音轨）以得到伴奏
+        dtype: boolean
+        value: false
+        template: '--extract_instrumental'
+
+      - key: GPU_Device_IDs
+        name: GPU序号
+        desc: 使用的 GPU ID 列表（例如 [0] 或 [0,1]）。默认使用0。
+        dtype: number
+        method: input
+        value: 0
+        template: '--device_ids #{#{}}'
+
+      - key: force_cpu
+        name: 强制使用CPU
+        desc: 即使 CUDA 可用，也强制在 CPU 上运行。
+        dtype: boolean
+        value: false
+        template: '--force_cpu'
+
+      - key: use_tta
+        name: 测试时增强（TTA）
+        desc: TTA（极性/通道反转），以提高质量并减少噪声。
+        dtype: boolean
+        value: false
+        template: '--use_tta'
+
+      - key: disable_detailed_pbar
+        name: 是否禁用输出进度条
+        desc: 禁用每个批次的进度条（输出更简洁）。
+        dtype: boolean
+        value: false
+        template: '--disable_detailed_pbar'
+
+      - key: draw_spectro
+        name: 波形频谱采样周期
+        desc: 指定从分离后的每轨波形中提取多长时间用于生成频谱图，频谱图保存于输出文件夹中。本周期*采样率=抽取时长
+        dtype: number
+        min: 0
+        value: 0
+        step: 0.1
+        template: '--draw_spectro #{}'
+
+      - key: lora_checkpoint_peft
+        name: LoRA PEFT权重路径
+        desc: LoRA PEFT 检查点路径。
+        dtype: file
+        method: select
+        value: ""
+        template: '--lora_checkpoint_peft #{}'
+
+      - key: lora_checkpoint_loralib
+        name: LoRA 权重路径
+        desc: LoRA Loralib 检查点路径。
+        dtype: file
+        method: select
+        value: ""
+        template: '--lora_checkpoint_loralib #{}'
+
+  - key: inject_meta
+    name: 模型信息注入
+    desc: |
+      为 cofnig 写入 model_type 与 model_checkpoint，并保存为新文件，之后读取该cofnig即可直接进行推理   
+      或许也能理解为安装模型？  
+      **[注]**： 由于配置文件会记录模型权重的位置，因此如果模型权重更改了位置需要重新迁移一次  
+    template: '& "#{python}" "#{msst_dir}/scripts/inject_meta_to_config.py" --model-type "#{model_type}" --model-checkpoint "#{model_checkpoint}" --source-path "#{source_path}" --output-dir "#{output_dir}"#{output_name}'
+    arguments:
+      - key: source_path
+        name: 原配置路径
+        desc: 需要注入元数据的原始配置文件
+        dtype: file
+        method: select
+        required: true
+
+      - key: model_type
+        name: 模型类型
+        desc: 写入到 _leaf_meta.model_type
+        method: select
+        value: ~
+        options: *model_types
+        required: true
+
+      - key: model_checkpoint
+        name: 模型权重文件
+        desc: 写入到 _leaf_meta.model_checkpoint
+        dtype: file
+        method: select
+        required: true
+
+      - key: output_dir
+        name: 输出目录
+        desc: 新配置的保存目录，不指定就覆盖原文件
+        dtype: directory
+        method: select
+
+      - key: output_name
+        name: 输出文件名
+        desc: 可选，留空则沿用原配置文件名
+        dtype: string
+        method: input
+        template: ' --output-name "#{}"'
+
+  - key: migarate-from-webui
+    name: 从WebUI迁移
+    desc: |
+      解析 MSST WebUI 安装的模型，调用【模型信息注入】模块合并并写入配置文件  
+      对于预设，支持解析对应配置文件并将其以 .flow.yaml 配置形式迁移到 leaf 中（*使用该功能默认需要解析已安装模型*）  
+      **[注]**： 由于配置文件会记录模型权重的位置，因此如果模型权重更改了位置需要重新迁移一次  
+    template: 
+      # 仅用于兼容 msst-webui ，为它安装缺少的ruamel.yaml
+      - 'if (!(& "#{python}" -c "import ruamel.yaml" 2>$null)) { & "#{python}" -m pip install ruamel.yaml }'
+      - 'if (!(& "#{python}" -c "import loralib" 2>$null)) { & "#{python}" -m pip install loralib }'
+      - '& "#{python}" "#{msst_dir}/scripts/migarate_from_webui.py" --msst-webui-dir "#{msst-webui-dir}" #{official-model}#{unofficial-model}#{migarate-preset}#{leaf-dir}'
+    arguments:
+      - key: msst-webui-dir
+        name: WebUI目录
+        desc: msst-webui安装目录
+        dtype: directory
+        method: select
+        dir: *webui_dir
+        value: *webui_dir
+        required: true
+
+      - key: official-model
+        name: 迁移官方模型
+        desc: 解析并迁移 msst webui 自带模型（默认安装的）
+        dtype: boolean
+        template: ' --official-model'
+        value: true
+
+      - key: unofficial-model
+        name: 迁移非官方模型
+        desc: 解析并迁移 msst webui 里第三方模型（自行安装的）
+        dtype: boolean
+        template: ' --unofficial-model'
+        value: true
+
+      - key: migarate-preset
+        name: 迁移预设
+        desc: 将 msst webui 的预设（preset）迁移到 leaf ，生成 flow 配置 "MSST-webui.local.flow.yaml"
+        dtype: boolean
+        template: ' --preset-to-leaf-flow'
+        value: true
+
+      - key: leaf-dir
+        name: leaf目录
+        desc: leaf安装/解压目录
+        dtype: directory
+        method: select|resolve
+        template: ' --leaf-dir "#{}"'
+        value: .
