@@ -81,22 +81,25 @@ leaf²启动后默认启动打开首页，将展示 `bud/` 目录下的所有蓝
 </p>
 
 ### 执行历史
-页面右上角提供执行历史列表，显示执行的模块、参数，点击后自动跳转填充。目前队列容量20，所有模块共享。
+页面右上角提供执行历史列表，显示执行的模块、参数，点击后自动跳转填充。目前队列默认容量20，每个模块各自独立。
 <p align="center">
-  <img src="assets/screenshots/execution-history.png" alt="home" width="900" />
+  <img src="assets/screenshots/execution-history.png" alt="execution-history" width="900" />
 </p>
 
 ### 任务队列
 右上角任务详情按钮可以看到正在执行的命令输出与任务队列，支持对正在执行与等待的任务进行撤销
 <p align="center">
-  <img src="assets/screenshots/task-detail.png" alt="home" width="900" />
+  <img src="assets/screenshots/task-detail.png" alt="task-detail" width="900" />
 </p>
 
 ### Flow & 临时文件
 flow支持连续执行多个模块（任务），对应的命令同样按顺序串行执行。输入输出支持临时文件（mmap方式），使数据在模块间更迅速地流动。
 <p align="center">
-  <img src="assets/screenshots/mmap-flow.png" alt="home" width="900" />
+  <img src="assets/screenshots/mmap-flow.png" alt="mmap-flow" width="900" />
 </p>
+
+## 致谢
+- [linux.do](https://linux.do)：里面的佬友各个都是人才，说话又好听，超喜欢在里面。
 
 ## 许可证
 leaf-flow 基于 **AGPL 3.0** 发布。
