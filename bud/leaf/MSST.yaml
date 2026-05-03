@@ -146,7 +146,9 @@ modules:
       若选取的 config_path（配置路径） 已经注入了必须的 model_type（模型类型）、start_check_point（模型权重）  
       就不再需要选择后面两个，可直接推理，否则三者都必选
     template:
-      - '& "#{python}" "#{msst_dir}/inference.py" #{config_path} #{input_path} --temporary-output "#{temp-instrument}:#{temp-output}" #{model_type} #{start_check_point} #{store_dir} #{draw_spectro} #{device_ids} #{extract_instrumental} #{disable_detailed_pbar} #{force_cpu} #{use_flac} #{pcm_type} #{use_tta} #{lora_checkpoint_peft} --filename_template "#{filename_template}" #{lora_checkpoint_loralib}'
+      # - 'cd #{msst_dir}'
+      # - 'uv run --% inference.py #{config_path} #{input_path} --temporary-output "#{temp-instrument}:#{temp-output}" #{model_type} #{start_check_point} #{store_dir} #{draw_spectro} #{device_ids} #{extract_instrumental} #{disable_detailed_pbar} #{force_cpu} #{use_flac} #{pcm_type} #{use_tta} #{lora_checkpoint_peft} --filename_template "#{filename_template}" #{lora_checkpoint_loralib}'
+      - '& "#{python}" "#{msst_dir}/inference.py" #{config_path} #{input_path} --temporary-output "#{temp-instrument}:#{temp-output}" #{model_type} #{start_check_point} #{instrument} #{store_dir} #{draw_spectro} #{device_ids} #{extract_instrumental} #{disable_detailed_pbar} #{force_cpu} #{use_flac} #{pcm_type} #{use_tta} #{lora_checkpoint_peft} --filename_template "#{filename_template}" #{lora_checkpoint_loralib}'
     shell: ps
     dynamicBind:
       - from: '#{{config_path.value}}'
@@ -327,9 +329,9 @@ modules:
       为 cofnig 写入 model_type 与 model_checkpoint，并保存为新文件，之后读取该cofnig即可直接进行推理   
       或许也能理解为安装模型？  
       **[注]**： 由于配置文件会记录模型权重的位置，因此如果模型权重更改了位置需要重新迁移一次  
-    template: '& "#{python}" "#{msst_dir}/scripts/inject_meta_to_config.py" --model-type "#{model_type}" --model-checkpoint "#{model_checkpoint}" --source-path "#{source_path}" --output-dir "#{output_dir}"#{output_name}'
+    template: '& "#{python}" "#{msst_dir}/scripts/inject_meta_to_config.py" --model-type "#{model_type}" --model-checkpoint "#{model_checkpoint}" --config-path "#{config-path}" #{output_dir}#{output_name}'
     arguments:
-      - key: source_path
+      - key: config-path
         name: 原配置路径
         desc: 需要注入元数据的原始配置文件
         dtype: file
@@ -356,6 +358,7 @@ modules:
         desc: 新配置的保存目录，不指定就覆盖原文件
         dtype: directory
         method: select
+        template: ' --output-dir "#{}"'
 
       - key: output_name
         name: 输出文件名
