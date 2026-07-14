@@ -60,6 +60,10 @@ export function useScroll(options: UseScrollOptions = {}): UseScrollReturn {
           el.scrollLeft += e.deltaX * speed
           el.scrollTop += e.deltaY * speed
       }
+    } else {
+      if (preventDefault) {
+        e.preventDefault()
+      }
     }
   }
 

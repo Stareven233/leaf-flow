@@ -1,4 +1,4 @@
-import { createSignal, onMount, onCleanup, For } from 'solid-js'
+import { createSignal, createMemo, onMount, onCleanup, For, Show } from 'solid-js'
 import { useAppNavigate } from '@/utils/routes'
 import type { DirEntry } from '@/types/file'
 import Card from '@/components/view/LeafCard'
@@ -13,6 +13,8 @@ import { saveConfigMTime, loadConfigMTime } from '@/utils/execution'
 import { useConfigStore } from '@/stores/config'
 import { useLazyLoad } from '@/utils/hooks/useLazyLoad'
 import * as constants from '@/utils/constants'
+import { isPinned, nextOpenMTime, matchName } from '@/utils/homeList'
+import { Search, X } from 'lucide-solid'
 
 export const yamlRegex = /\.(yaml|yml)$/i
 export const flowYamlRegex = /\.flow\.(yaml|yml)$/i
@@ -49,22 +51,49 @@ export default function HomeView() {
     flow: {},
   })
 
-  const projectNames = () =>
+  const projectNames = createMemo(() =>
     Object.entries(itemMTime().project)
       .sort((a, b) => b[1] - a[1])
-      .map((v) => v[0])
-  const flowNames = () =>
+      .map((v) => v[0]),
+  )
+  const flowNames = createMemo(() =>
     Object.entries(itemMTime().flow)
       .sort((a, b) => b[1] - a[1])
-      .map((v) => v[0])
+      .map((v) => v[0]),
+  )
+
+  const [draftQuery, setDraftQuery] = createSignal('')
+  const [activeQuery, setActiveQuery] = createSignal('')
+
+  const filtering = createMemo(() => activeQuery().trim().length > 0)
+
+  const filteredProjectNames = createMemo(() => {
+    const all = projectNames()
+    if (!filtering()) {
+      return all
+    }
+    const q = activeQuery()
+    return all.filter((n) => matchName(n, q, projectStore.get(n)?.name))
+  })
+  const filteredFlowNames = createMemo(() => {
+    const all = flowNames()
+    if (!filtering()) {
+      return all
+    }
+    const q = activeQuery()
+    return all.filter((n) => matchName(n, q, flowStore.get(n)?.name))
+  })
 
   const [menuVisible, setMenuVisible] = createSignal(false)
   const [menuPos, setMenuPos] = createSignal({ x: 0, y: 0 })
   const [selectedMenu, setSelectedMenu] = createSignal('')
   const [menuType, setMenuType] = createSignal<'project' | 'flow'>('project')
 
+  let projectSectionEl: HTMLElement | undefined
+  let flowSectionEl: HTMLElement | undefined
+
   const projectLazy = useLazyLoad({
-    getNames: projectNames,
+    getNames: () => filteredProjectNames(),
     getItem: (k) => projectStore.get(k),
     fetchBatch: fetchBaseProject,
     loadItem: (p) => projectStore.load(p),
@@ -73,7 +102,7 @@ export default function HomeView() {
   })
 
   const flowLazy = useLazyLoad({
-    getNames: flowNames,
+    getNames: () => filteredFlowNames(),
     getItem: (k) => flowStore.get(k),
     fetchBatch: fetchBaseFlow,
     loadItem: (f) => flowStore.load(f),
@@ -116,7 +145,7 @@ export default function HomeView() {
   const openProject = (pkey: string, mkey?: string) => {
     navigate('project', pkey, mkey, { state: 'first-choice' })
     setItemMTime((prev) => {
-      const updated = { ...prev.project, [pkey]: Date.now() }
+      const updated = { ...prev.project, [pkey]: nextOpenMTime(prev.project[pkey] ?? 0) }
       saveConfigMTime(updated, 'project')
       return { ...prev, project: updated }
     })
@@ -125,7 +154,7 @@ export default function HomeView() {
   const openFlow = (fkey: string, bkey?: string) => {
     navigate('flow', fkey, bkey, { state: 'first-choice' })
     setItemMTime((prev) => {
-      const updated = { ...prev.flow, [fkey]: Date.now() }
+      const updated = { ...prev.flow, [fkey]: nextOpenMTime(prev.flow[fkey] ?? 0) }
       saveConfigMTime(updated, 'flow')
       return { ...prev, flow: updated }
     })
@@ -155,9 +184,9 @@ export default function HomeView() {
 
   const togglePin = (name: string, type: 'project' | 'flow') => {
     const mtime = itemMTime()[type][name]!
-    const isPinned = mtime >= constants.BIG_NUMBER
+    const pinned = isPinned(mtime)
     setItemMTime((prev) => {
-      const updated = { ...prev[type], [name]: mtime + (isPinned ? -1 : 1) * constants.BIG_NUMBER }
+      const updated = { ...prev[type], [name]: mtime + (pinned ? -1 : 1) * constants.BIG_NUMBER }
       saveConfigMTime(updated, type)
       return { ...prev, [type]: updated }
     })
@@ -168,7 +197,7 @@ export default function HomeView() {
     const name = selectedMenu()
     const type = menuType()
     const mtime = itemMTime()[type][name]!
-    const isPinned = mtime >= constants.BIG_NUMBER
+    const pinned = isPinned(mtime)
 
     if (type === 'flow') {
       return [
@@ -187,7 +216,7 @@ export default function HomeView() {
           },
         },
         { label: '外部编辑', onClick: () => openExternalEditor(name, 'flow') },
-        { label: isPinned ? '取消置顶' : '置顶', onClick: () => togglePin(name, 'flow') },
+        { label: pinned ? '取消置顶' : '置顶', onClick: () => togglePin(name, 'flow') },
       ]
     }
 
@@ -207,9 +236,56 @@ export default function HomeView() {
         },
       },
       { label: '外部编辑', onClick: () => openExternalEditor(name, 'project') },
-      { label: isPinned ? '取消置顶' : '置顶', onClick: () => togglePin(name, 'project') },
+      { label: pinned ? '取消置顶' : '置顶', onClick: () => togglePin(name, 'project') },
     ]
   }
+
+  const commitSearch = () => {
+    setActiveQuery(draftQuery().trim())
+  }
+
+  const clearSearch = () => {
+    setDraftQuery('')
+    setActiveQuery('')
+  }
+
+  const onSearchKeyDown = (e: KeyboardEvent) => {
+    if (e.key !== 'Enter') {
+      return
+    }
+    if (e.isComposing || e.keyCode === 229) {
+      return
+    }
+    e.preventDefault()
+    commitSearch()
+  }
+
+  const scrollToSection = (el: HTMLElement | undefined) => {
+    el?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
+  const projectCountLabel = createMemo(() => {
+    const all = projectNames().length
+    const filtered = filteredProjectNames().length
+    if (filtering()) {
+      return `${filtered}/${all}`
+    }
+    return all ? String(all) : undefined
+  })
+  const flowCountLabel = createMemo(() => {
+    const all = flowNames().length
+    const filtered = filteredFlowNames().length
+    if (filtering()) {
+      return `${filtered}/${all}`
+    }
+    return all ? String(all) : undefined
+  })
+  const projectFilterNoMatch = createMemo(
+    () => filtering() && projectNames().length > 0 && filteredProjectNames().length === 0,
+  )
+  const flowFilterNoMatch = createMemo(
+    () => filtering() && flowNames().length > 0 && filteredFlowNames().length === 0,
+  )
 
   onMount(() => {
     initConfigMTime()
@@ -225,10 +301,76 @@ export default function HomeView() {
   })
 
   return (
-    <div class="w-full px-4 my-auto flex flex-col gap-8">
+    <div class="w-full my-auto flex flex-col gap-6">
       {}
-      <CardSection title="项目" hasItems={projectNames().length > 0} emptyText="未找到项目">
-        <For each={projectNames()}>
+      <div class="bg-white rounded-lg shadow px-4 py-3 flex flex-wrap items-center gap-3">
+        <div class="relative flex-1 min-w-48 max-w-md">
+          <Search
+            size={16}
+            class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
+          />
+          <input
+            type="search"
+            class="w-full pl-9 pr-8 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-green-200 [&::-webkit-search-cancel-button]:appearance-none [&::-webkit-search-decoration]:appearance-none"
+            placeholder="按名称搜索，回车过滤…"
+            value={draftQuery()}
+            onInput={(e) => setDraftQuery(e.currentTarget.value)}
+            onKeyDown={onSearchKeyDown}
+            aria-label="按名称搜索"
+          />
+          <Show when={draftQuery() || filtering()}>
+            <button
+              type="button"
+              class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-0.5"
+              onClick={clearSearch}
+              aria-label="清除搜索"
+              title="清除"
+            >
+              <X size={14} />
+            </button>
+          </Show>
+        </div>
+
+        <Show when={filtering()}>
+          <span class="text-sm text-gray-500">
+            已过滤「{activeQuery()}」· 项目 {filteredProjectNames().length}/{projectNames().length}
+            {flowNames().length > 0
+              ? ` · 流 ${filteredFlowNames().length}/${flowNames().length}`
+              : ''}
+          </span>
+        </Show>
+
+        <nav class="flex items-center gap-2 ml-auto text-sm">
+          <button
+            type="button"
+            class="px-2 py-1 text-green-600 hover:bg-green-50 rounded"
+            onClick={() => scrollToSection(projectSectionEl)}
+          >
+            项目
+          </button>
+          <button
+            type="button"
+            class="px-2 py-1 text-green-600 hover:bg-green-50 rounded"
+            onClick={() => scrollToSection(flowSectionEl)}
+          >
+            流
+          </button>
+        </nav>
+      </div>
+
+      {}
+      <CardSection
+        title="项目"
+        hasItems={filteredProjectNames().length > 0}
+        emptyText="未找到项目"
+        noMatchText={`无匹配「${activeQuery()}」`}
+        filterNoMatch={projectFilterNoMatch()}
+        countLabel={projectCountLabel()}
+        sectionRef={(el) => {
+          projectSectionEl = el
+        }}
+      >
+        <For each={filteredProjectNames()}>
           {(name) => (
             <Card
               ref={(el) => projectLazy.registerRef(el, name)}
@@ -236,6 +378,7 @@ export default function HomeView() {
               data={projectStore.get(name)}
               error={projectLazy.isFailed(name)}
               tags={projectStore.get(name)?.modules}
+              pinned={isPinned(itemMTime().project[name] ?? 0)}
               onClick={openProject}
               onContextMenu={(e) => showContextMenu(e, name)}
             />
@@ -244,8 +387,17 @@ export default function HomeView() {
       </CardSection>
 
       {}
-      <CardSection title="流" hasItems={flowNames().length > 0}>
-        <For each={flowNames()}>
+      <CardSection
+        title="流"
+        hasItems={filteredFlowNames().length > 0}
+        noMatchText={`无匹配「${activeQuery()}」`}
+        filterNoMatch={flowFilterNoMatch()}
+        countLabel={flowCountLabel()}
+        sectionRef={(el) => {
+          flowSectionEl = el
+        }}
+      >
+        <For each={filteredFlowNames()}>
           {(name) => (
             <Card
               ref={(el) => flowLazy.registerRef(el, name)}
@@ -253,6 +405,7 @@ export default function HomeView() {
               data={flowStore.get(name)}
               error={flowLazy.isFailed(name)}
               tags={flowStore.get(name)?.branches}
+              pinned={isPinned(itemMTime().flow[name] ?? 0)}
               onClick={openFlow}
               onContextMenu={(e) => showContextMenu(e, name, 'flow')}
             />

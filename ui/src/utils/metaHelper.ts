@@ -11,11 +11,12 @@ export const normalizeMetaValue = (
   value: ArgumentValue | Partial<Argument>,
 ): Argument => {
   if (typeof value === 'object' && value !== null && 'value' in value) {
+    const partialArg = value as Partial<Argument>
     return {
-      ...value,
-      key: value.key || key,
-      name: value.name || value.key || key,
-    }
+      ...partialArg,
+      key: partialArg.key || key,
+      name: partialArg.name || partialArg.key || key,
+    } as Argument
   }
 
   const inferType = (val: ArgumentValue): ArgumentDType => {

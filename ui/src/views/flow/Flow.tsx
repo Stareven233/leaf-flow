@@ -11,6 +11,7 @@ import type { Argument, ArgumentMap, ArgumentSetter } from '@/types/project'
 import NButton from '@/components/common/NButton'
 import { useDecodedParams } from '@/utils/hooks/useDecodedParams'
 import { useStickyBottom } from '@/utils/hooks/useStickyBottom'
+import { useTemporaryArguments } from '@/utils/hooks/useTemporaryArguments'
 import { SimpleArrowDownIcon } from '@/components/common/Icons'
 import { NMarkdown } from '@/components/common/NMarkdown'
 import { useCommandExecution } from '@/utils/hooks/useCommandExecution'
@@ -60,67 +61,53 @@ export default function FlowView() {
     return i !== -1 ? flow!.branches[i] : undefined
   }
 
-  const loadTempArgs = () => {
-    const flow = getFlow()
-    const branch = getCurrentBranch()
-    if (!flow || !branch) {
-      return
-    }
+  const {
+    load: loadTempArgs,
+    save: saveTempArgs,
+    clear: clearTempArgs,
+  } = useTemporaryArguments<Record<string, ArgumentMap>>(
+    'flow',
+    getFlowKey,
+    () => getCurrentBranch()?.key,
+    flowStore,
+    (tempMap) => {
+      const flow = getFlow()
+      const branch = getCurrentBranch()
+      if (!flow || !branch) return
 
-    const tempMap = exec.loadTemporaryArgument('flow', flow.key, branch.key) as Record<
-      string,
-      ArgumentMap
-    >
-    if (!tempMap) {
-      return
-    }
+      const bIndex = getCurrentBranchIndex()
+      branch.modules.forEach((mod, mIndex) => {
+        const argMap = tempMap[mod.key]
+        if (!argMap) return
 
-    const bIndex = getCurrentBranchIndex()
-    branch.modules.forEach((mod, mIndex) => {
-      const argMap = tempMap[mod.key]
-      if (!argMap) {
-        return
-      }
-
-      mod.arguments?.forEach((arg, aIndex) => {
-        const value = argMap[arg.key]
-        flowStore.set(
-          getFlowKey(),
-          'branches',
-          bIndex,
-          'modules',
-          mIndex,
-          'arguments',
-          aIndex,
-          'value',
-          value,
-        )
+        mod.arguments?.forEach((arg, aIndex) => {
+          const value = argMap[arg.key]
+          flowStore.set(
+            getFlowKey(),
+            'branches',
+            bIndex,
+            'modules',
+            mIndex,
+            'arguments',
+            aIndex,
+            'value',
+            value,
+          )
+        })
       })
-    })
-  }
+    },
+    () => {
+      const branch = getCurrentBranch()
+      if (!branch) return undefined
 
-  const saveTempArgs = () => {
-    const flow = getFlow()
-    const branch = getCurrentBranch()
-    if (!flow || !branch) {
-      return
-    }
-
-    const tempMap: Record<string, ArgumentMap> = {}
-    branch.modules.forEach((mod) => {
-      const rmap = exec.gatherArgumentStatus(mod.arguments, undefined, false)
-      tempMap[mod.key] = exec.fromRenderMap(rmap, 'rawValue')
-    })
-    exec.saveTemporaryArgument('flow', flow.key, branch.key, tempMap)
-  }
-
-  const clearTempArgs = () => {
-    const flow = getFlow()
-    const branch = getCurrentBranch()
-    if (flow && branch) {
-      exec.clearTemporaryArgument('flow', flow.key, branch.key)
-    }
-  }
+      const tempMap: Record<string, ArgumentMap> = {}
+      branch.modules.forEach((mod) => {
+        const rmap = exec.gatherArgumentStatus(mod.arguments, undefined, false)
+        tempMap[mod.key] = exec.fromRenderMap(rmap, 'rawValue')
+      })
+      return tempMap
+    },
+  )
 
   const resolveBranch = async (forceReload: boolean = false) => {
     const flow = forceReload ? await flowStore.fetch(getFlowKey(), true) : getFlow()
@@ -146,7 +133,7 @@ export default function FlowView() {
         'arguments',
       )
       const key = dBind.uniqueKey('F', flow.key, bobj.key, mobj.key)
-      dBind.init(key, _set, mobj)
+      dBind.init(key, _set, mobj, flow.meta, bobj.meta)
     })
     flowStore.set(flow.key, 'branches', bIndex, resolved)
     loadTempArgs()
@@ -213,11 +200,11 @@ export default function FlowView() {
 
   const handleModSetArgument = (mIndex: number, aIndex: number, updates: Partial<Argument>) => {
     withBranchIndex((bIndex) => {
-      saveTempArgs()
+      const flow = getFlow()
       const bobj = getCurrentBranch()
       const mobj = bobj?.modules[mIndex]
       const aobj = mobj?.arguments?.[aIndex]
-      if (!aobj) {
+      if (!aobj || !flow || !bobj) {
         return
       }
 
@@ -234,8 +221,8 @@ export default function FlowView() {
       for (const [key, val] of Object.entries(updates)) {
         _set(aIndex, key as keyof Argument, val)
       }
-      const key = dBind.uniqueKey('F', fkey, bobj!.key, mobj.key)
-      dBind.update(key, _set, mobj, aobj, Object.keys(updates))
+      const key = dBind.uniqueKey('F', fkey, bobj.key, mobj.key)
+      dBind.update(key, _set, mobj, aobj, Object.keys(updates), flow.meta, bobj.meta)
     })
   }
 
@@ -398,21 +385,22 @@ export default function FlowView() {
                 />
               </div>
 
-              <Show when={expandedMods().has(mIndex())}>
-                <div class="px-4 pb-4 space-y-2 bg-white">
-                  <Show when={!mod.arguments || mod.arguments.length === 0}>
-                    <p class="text-sm text-gray-500">此步骤无参数</p>
-                  </Show>
-                  <For each={mod.arguments}>
-                    {(argument, aIndex) => (
-                      <ArgumentRow
-                        argument={argument}
-                        setArgument={(updates) => handleModSetArgument(mIndex(), aIndex(), updates)}
-                      />
-                    )}
-                  </For>
-                </div>
-              </Show>
+              <div
+                class="px-4 pb-4 space-y-2 bg-white"
+                classList={{ hidden: !expandedMods().has(mIndex()) }}
+              >
+                <Show when={!mod.arguments || mod.arguments.length === 0}>
+                  <p class="text-sm text-gray-500">此步骤无参数</p>
+                </Show>
+                <For each={mod.arguments}>
+                  {(argument, aIndex) => (
+                    <ArgumentRow
+                      argument={argument}
+                      setArgument={(updates) => handleModSetArgument(mIndex(), aIndex(), updates)}
+                    />
+                  )}
+                </For>
+              </div>
             </div>
           )}
         </For>

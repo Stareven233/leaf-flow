@@ -126,8 +126,8 @@ modules:
     name: 布尔值输入演示
     desc: 演示 boolean 类型的各种输入方式
     template:
-      # - 'echo "布尔单选: #{checkbox_bool}; 布尔开关: #{switch_bool}; 布尔数组: [#{array_bool}]; 布尔数组: [#{array_switch_bool}]"'
-      - 'echo "布尔单选: #{checkbox_bool}; 布尔开关: #{switch_bool}"'
+      - 'echo "布尔单选: #{checkbox_bool}; 布尔开关: #{switch_bool}; 布尔单选: #{radio_bool}; 布尔下拉: #{select_bool}"'
+      - 'echo "布尔数组: [#{array_bool}]; 布尔数组: [#{array_switch_bool}]"'
     arguments:
       - key: checkbox_bool
         name: 单选框
@@ -142,38 +142,38 @@ modules:
         method: switch
         value: false
 
-      # - key: radio_bool
-      #   name: 单选按钮
-      #   desc: 使用单选按钮选择 true/false
-      #   dtype: boolean
-      #   method: radio
-      #   options: ['true', 'false']
-      #   value: true
+      - key: radio_bool
+        name: 单选按钮
+        desc: 使用单选按钮选择 true/false
+        dtype: boolean
+        method: radio
+        options: [true, false]
+        value: true
 
-      # - key: select_bool
-      #   name: 单选下拉
-      #   desc: 使用下拉选择 true/false
-      #   dtype: boolean
-      #   method: select
-      #   options: ['true', 'false']
-      #   value: true
+      - key: select_bool
+        name: 单选下拉
+        desc: 使用下拉选择 true/false
+        dtype: boolean
+        method: select
+        options: [true, false]
+        value: true
 
-      # - key: array_bool
-      #   name: 布尔数组输入
-      #   desc: 输入多个布尔值
-      #   dtype: boolean
-      #   multiple: true
-      #   value: false
-      #   template: "#{#{}, }"
+      - key: array_bool
+        name: 布尔数组输入
+        desc: 输入多个布尔值
+        dtype: boolean
+        multiple: true
+        value: false
+        template: "#{#{}, }"
 
-      # - key: array_switch_bool
-      #   name: 布尔数组输入
-      #   desc: 输入多个布尔值
-      #   dtype: boolean
-      #   method: switch
-      #   multiple: true
-      #   value: false
-      #   template: "#{#{}, }"
+      - key: array_switch_bool
+        name: 布尔数组输入
+        desc: 输入多个布尔值
+        dtype: boolean
+        method: switch
+        multiple: true
+        value: false
+        template: "#{#{}, }"
 
   - key: path-input
     name: 路径输入演示

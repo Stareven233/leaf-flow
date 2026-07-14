@@ -1,4 +1,4 @@
-import type { Module, Argument, DynamicBind, ArgumentSetter } from '@/types/project'
+import type { Module, Argument, DynamicBind, ArgumentSetter, ModuleMeta } from '@/types/project'
 import { readFile, listEntries, queryPathType } from '@/apis/file'
 import { parse as yamlParse } from 'yaml'
 import { suffix as pathSuffix } from '@/utils/path'
@@ -6,13 +6,14 @@ import _ from 'lodash'
 
 interface VariedBind {
   isDirect: boolean
+  refKey: string
   srcAttr: string
   valuePath?: string
   destAttr: string
 }
 
 const fromRE = /^#(\{\{?)([^}]+)\}?\}$/
-const fromRuleRE = /^(\w+\()?(.+?)(\)[^\(\)]*)?$/
+const argFromRE = /^(\w+\()?(.+?)(\)[^\(\)]*)?$/
 const funcMapping: { [key: string]: <T extends { length: number }>(obj: T) => any } = {
   keys: Object.keys,
   values: Object.values,
@@ -98,7 +99,7 @@ const parseByFromRule = (data: any, rule: string | undefined): any => {
   if (typeof data !== 'object' || !rule) {
     return data
   }
-  const match = rule.match(fromRuleRE)
+  const match = rule.match(argFromRE)
   if (!match) {
     return data
   }
@@ -124,7 +125,70 @@ const parseByFromRule = (data: any, rule: string | undefined): any => {
   return result
 }
 
-const initDynamicBinds = async (cacheKey: string, setFunc: ArgumentSetter, mobj: Module) => {
+const applyBindValue = async (
+  cacheKey: string,
+  setFunc: ArgumentSetter,
+  mobj: Module,
+  vb: VariedBind,
+  refValue: any,
+) => {
+  try {
+    let value = refValue
+    if (!vb.isDirect) {
+      if (typeof value !== 'string') {
+        throw new Error(`${value}, type ${typeof value}, is not a valid url/filepath`)
+      }
+      value = await fetchDataSource(value)
+    }
+    value = parseByFromRule(value, vb.valuePath)
+    updateBindTarget(cacheKey, setFunc, mobj, vb.destAttr, value)
+  } catch (error) {
+    console.warn(`[DynamicBind] Failed to apply bind:`, error)
+  }
+}
+
+const resolveRefValue = (
+  key: string,
+  attr: string,
+  mobj: Module,
+  meta?: ModuleMeta,
+  subMeta?: ModuleMeta,
+): any => {
+  const localArg = mobj.arguments?.find((arg) => arg.key === key)
+  if (localArg) {
+    const result = _.get(localArg, attr)
+    if (result !== undefined) {
+      return result
+    }
+  }
+
+  if (subMeta && key in subMeta) {
+    const metaArg = subMeta[key]
+    const result = _.get(metaArg, attr)
+    if (result !== undefined) {
+      return result
+    }
+  }
+
+  if (meta && key in meta) {
+    const metaArg = meta[key]
+    const result = _.get(metaArg, attr)
+    if (result !== undefined) {
+      return result
+    }
+  }
+
+  console.warn(`[DynamicBind] Key "${key}" not found in any scope (arguments/subMeta/meta)`)
+  return undefined
+}
+
+const initDynamicBinds = async (
+  cacheKey: string,
+  setFunc: ArgumentSetter,
+  mobj: Module,
+  meta?: ModuleMeta,
+  subMeta?: ModuleMeta,
+) => {
   if (!mobj.dynamicBind) {
     return
   }
@@ -145,6 +209,7 @@ const initDynamicBinds = async (cacheKey: string, setFunc: ArgumentSetter, mobj:
 
   for (const bind of mobj.dynamicBind) {
     const match = bind.from.match(fromRE)
+
     if (!match) {
       await handleDefiniteBind(bind)
       continue
@@ -152,22 +217,37 @@ const initDynamicBinds = async (cacheKey: string, setFunc: ArgumentSetter, mobj:
 
     const isDirect = match[1] !== '{{'
     const refPath = match[2]!
-    const [akey, aAttr] = refPath.split('.')
-    if (!akey || !aAttr) {
+    const [key, ...attrParts] = refPath.split('.')
+    const attr = attrParts.join('.')
+
+    if (!key || !attr) {
+      continue
+    }
+
+    const [targetKey] = bind.to.split('.')
+    const isValidTarget = mobj.arguments?.some((arg) => arg.key === targetKey)
+    if (!isValidTarget) {
+      console.warn(`[DynamicBind] Invalid target "${bind.to}", must be a module argument`)
       continue
     }
 
     const parsed: VariedBind = {
       isDirect,
-      srcAttr: aAttr,
+      refKey: key,
+      srcAttr: attr,
       valuePath: bind.fromRule,
       destAttr: bind.to,
     }
 
-    if (!aMap.has(akey)) {
-      aMap.set(akey, [])
+    const refValue = resolveRefValue(key, attr, mobj, meta, subMeta)
+    if (refValue !== undefined) {
+      await applyBindValue(cacheKey, setFunc, mobj, parsed, refValue)
     }
-    aMap.get(akey)!.push(parsed)
+
+    if (!aMap.has(key)) {
+      aMap.set(key, [])
+    }
+    aMap.get(key)!.push(parsed)
   }
 
   variedBindCache.set(cacheKey, aMap)
@@ -179,6 +259,8 @@ const resolveDynamicBinds = async (
   mobj: Module,
   aobj: Argument,
   changedKeys: string[],
+  meta?: ModuleMeta,
+  subMeta?: ModuleMeta,
 ) => {
   const bindMap = variedBindCache.get(cacheKey)
   if (!bindMap) {
@@ -194,19 +276,9 @@ const resolveDynamicBinds = async (
       continue
     }
 
-    const refValue = _.get(aobj, vb.srcAttr) as Argument['value']
-    try {
-      let value = refValue
-      if (!vb.isDirect) {
-        if (typeof value !== 'string') {
-          throw new Error(`${value}, type ${typeof value}, is not a valid url/filepath`)
-        }
-        value = await fetchDataSource(value)
-      }
-      value = parseByFromRule(value, vb.valuePath)
-      updateBindTarget(cacheKey, setFunc, mobj, vb.destAttr, value)
-    } catch (error) {
-      console.warn(`[DynamicBind] Failed to resolve bind from "${aobj.key}.${vb.srcAttr}":`, error)
+    const refValue = resolveRefValue(vb.refKey, vb.srcAttr, mobj, meta, subMeta)
+    if (refValue !== undefined) {
+      await applyBindValue(cacheKey, setFunc, mobj, vb, refValue)
     }
   }
 }

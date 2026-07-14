@@ -1,74 +1,17 @@
 import { onMount, onCleanup, createEffect, on, Show, For } from 'solid-js'
-import type { SetStoreFunction } from 'solid-js/store'
 import { useProjectStore } from '@/stores/project'
 import ProjectHeader from '@/components/view/ProjectHeader'
 import ModuleTabs from '@/components/view/ModuleTabs'
 import { ArgumentRow } from '@/components/argumentInput'
 import * as exec from '@/utils/execution'
-import type { Module, Project, Argument, ArgumentMap, ArgumentSetter } from '@/types/project'
+import type { Module, Project, Argument, ArgumentSetter } from '@/types/project'
 import { useDecodedParams } from '@/utils/hooks/useDecodedParams'
 import { useStickyBottom } from '@/utils/hooks/useStickyBottom'
 import { useCommandExecution } from '@/utils/hooks/useCommandExecution'
+import { useTemporaryArguments } from '@/utils/hooks/useTemporaryArguments'
 import ExecuteActionBar from '@/components/ExecuteActionBar'
 import { NMarkdown } from '@/components/common/NMarkdown'
 import dBind from '@/utils/dynamicBind'
-
-function useArgumentManager(
-  getProject: () => Project | undefined,
-  getModule: () => Module | null,
-  getProjectKey: () => string,
-  setProject: SetStoreFunction<Record<string, Project>>,
-) {
-  const loadTempArgs = () => {
-    const project = getProject()
-    const module = getModule()
-    if (!project || !module) {
-      return
-    }
-
-    const tempMap = exec.loadTemporaryArgument('project', project.key, module.key) as ArgumentMap
-    if (!tempMap) {
-      return
-    }
-
-    const modIndex = project.modules.findIndex((m) => m.key === module.key)
-    if (modIndex === -1) {
-      return
-    }
-
-    const projectKey = getProjectKey()
-    module.arguments?.forEach((arg, aIndex) => {
-      const value = tempMap[arg.key]
-      setProject(projectKey, 'modules', modIndex, 'arguments', aIndex, 'value', value)
-    })
-  }
-
-  const saveTempArgs = () => {
-    const project = getProject()
-    const module = getModule()
-    if (!project || !module) {
-      return
-    }
-
-    const rmap = exec.gatherArgumentStatus(module.arguments || [], undefined, false)
-    const rawMap = exec.fromRenderMap(rmap, 'rawValue')
-    exec.saveTemporaryArgument('project', project.key, module.key, rawMap)
-  }
-
-  const clearTempArgs = () => {
-    const project = getProject()
-    const module = getModule()
-    if (project && module) {
-      exec.clearTemporaryArgument('project', project.key, module.key)
-    }
-  }
-
-  return {
-    loadTempArgs,
-    saveTempArgs,
-    clearTempArgs,
-  }
-}
 
 function useModuleExecution(getProject: () => Project | undefined, getModule: () => Module | null) {
   const cmdExec = useCommandExecution()
@@ -150,13 +93,6 @@ export default function ProjectView() {
     cleanupObservers,
   } = useStickyBottom()
 
-  const { loadTempArgs, saveTempArgs, clearTempArgs } = useArgumentManager(
-    getProject,
-    getModule,
-    getProjectKey,
-    projectStore.set,
-  )
-
   const {
     isExecuting,
     executionInfo,
@@ -165,6 +101,37 @@ export default function ProjectView() {
     setPreviewCommands,
     previewModule,
   } = useModuleExecution(getProject, getModule)
+
+  const {
+    load: loadTempArgs,
+    save: saveTempArgs,
+    clear: clearTempArgs,
+  } = useTemporaryArguments<Record<string, any>>(
+    'project',
+    getProjectKey,
+    () => getModule()?.key,
+    projectStore,
+    (tempMap) => {
+      const project = getProject()
+      const module = getModule()
+      if (!project || !module) return
+
+      const modIndex = project.modules.findIndex((m) => m.key === module.key)
+      if (modIndex === -1) return
+
+      module.arguments?.forEach((arg, aIndex) => {
+        const value = tempMap[arg.key]
+        projectStore.set(getProjectKey(), 'modules', modIndex, 'arguments', aIndex, 'value', value)
+      })
+    },
+    () => {
+      const module = getModule()
+      if (!module) return undefined
+
+      const rmap = exec.gatherArgumentStatus(module.arguments || [], undefined, false)
+      return exec.fromRenderMap(rmap, 'rawValue')
+    },
+  )
 
   onMount(() => {
     loadTempArgs()
@@ -194,9 +161,10 @@ export default function ProjectView() {
       return
     }
     const pkey = getProjectKey()
+    const project = getProject()
     const mobj = getModule()
     const aobj = mobj?.arguments?.[aIndex]
-    if (!aobj) {
+    if (!aobj || !project) {
       return
     }
 
@@ -205,7 +173,7 @@ export default function ProjectView() {
       _set(aIndex, key as keyof Argument, val)
     }
     const key = dBind.uniqueKey('P', pkey, mobj.key)
-    dBind.update(key, _set, mobj, aobj, Object.keys(updates))
+    dBind.update(key, _set, mobj, aobj, Object.keys(updates), project.meta)
   }
 
   return (
@@ -218,7 +186,7 @@ export default function ProjectView() {
         {}
         <div class="mt-2 mb-6 p-4 bg-green-50 rounded-md">
           {}
-          <NMarkdown content={getModule()?.desc || '暂无模块'} />
+          <NMarkdown content={getModule()?.desc || ''} />
         </div>
 
         {}

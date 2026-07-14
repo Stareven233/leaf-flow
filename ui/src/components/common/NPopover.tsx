@@ -119,7 +119,7 @@ const NPopover = (props: NPopoverProps) => {
     <Show when={popText()} fallback={props.children}>
       <section
         ref={triggerRef}
-        class="relative inline-block"
+        class="relative inline-block max-w-full min-w-0"
         onMouseEnter={openPopover}
         onMouseLeave={closePopover}
       >

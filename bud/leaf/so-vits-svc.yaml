@@ -1,0 +1,366 @@
+name: so-vits-svc
+desc: |
+  [SoftVC VITS Singing Voice Conversion](https://github.com/svc-develop-team/so-vits-svc)  
+  这个项目是为了让开发者最喜欢的动画角色唱歌而开发的，任何涉及真人的东西都与开发者的意图背道而驰。  
+
+meta:
+  sov_dir: &sov_dir D:/Code/projects/so-vits-svc
+  sov_exp_dir: &sov_exp_dir D:/Code/projects/so-vits-svc/exp
+  python:
+    dtype: file
+    method: select|resolve
+    value: ./bin/venv-svc/Scripts/python.exe
+
+modules:
+  - key: simple-infer
+    name: 基础推理
+    desc: |
+      只提供了简单基础的推理选项  
+      指定 `模型权重路径`（若为目录则自动选择里面迭代步数最大的一个模型）、`输入音频` 即可进行推理，其余未指定参数保持默认  
+      输出音频默认与输入位于同一个文件夹下
+    template:
+      - 'cd #{sov_dir}'
+      - '& #{python} infer.py -m "#{model-path}"#{input} -t #{trans}'
+    arguments:
+      - key: model-path
+        name: 模型权重路径
+        desc: 模型权重文件路径或目录，若为目录则自动选择目录下最新/迭代步数最大的 checkpoint
+        dtype: directory
+        method: select
+        value: ""
+        dir: *sov_exp_dir
+        required: true
+
+      - key: input
+        name: 输入音频
+        desc: 待转换的音频路径，可多选
+        dtype: file
+        method: select
+        multiple: true
+        dir: ''
+        template: '--input #{"#{}"}{ }'
+        required: true
+
+      - key: trans
+        name: 音高调整
+        desc: 音高调整，支持正负（半音），与输入文件一一对应
+        dtype: number
+        method: slide
+        value: 0
+        min: -12
+        max: 12
+        step: 1
+
+  - key: infer
+    name: 推理
+    desc: |
+      提供完整的推理选项，略显复杂  
+      至少指定 `模型权重路径`（若为目录则自动选择里面迭代步数最大的一个模型）、 `输入音频`，其余未指定参数保持默认   
+      输出音频默认与输入位于同一个文件夹下
+    template:
+      - 'cd #{sov_dir}'
+      - '& #{python} infer.py -m "#{model-path}"#{input} -t #{trans}#{config-path}#{spk_list}#{vocal_register_shift_key}#{use_spk_mix}#{f0_predictor}#{auto_predict_f0}#{clip}#{shallow_diffusion}#{enhance}#{linear_gradient}#{loudness_envelope_adjustment}#{cluster_model_path}#{cluster_infer_ratio}#{feature_retrieval}#{diffusion_model_path}#{config_diff_path}#{k_step}#{second_encoding}#{only_diffusion}#{slice_db}#{wav_format}#{enhancer_adaptive_key}#{device}#{vocoder_type}#{vocoder_ckpt_path}#{noice_scale}#{pad_seconds}#{linear_gradient_retain}#{f0_filter_threshold}'
+    shell: ps
+    dynamicBind:
+      - from: '#{{config-path.value}}'
+        fromRule: keys(spk)
+        to: spk_list.options
+    arguments:
+      - key: model-path
+        name: 模型权重路径
+        desc: 模型权重文件路径或目录，若为目录则自动选择目录下最新/迭代步数最大的 checkpoint
+        dtype: directory
+        method: select
+        value: ""
+        dir: *sov_exp_dir
+        required: true
+
+      - key: input
+        name: 输入音频
+        desc: 待转换的音频路径，可多选
+        dtype: file
+        method: select|mmap
+        multiple: true
+        dir: ''
+        template: '--input #{"#{}"}{ }'
+        required: true
+
+      - key: trans
+        name: 音高调整
+        desc: 音高调整，支持正负（半音），与输入文件一一对应
+        dtype: number
+        method: slide
+        value: 0
+        min: -12
+        max: 12
+        step: 1
+
+      - key: config-path
+        name: 配置文件
+        desc: |
+          模型配置文件路径，留空则自动使用与 `模型权重路径` 同目录下的 config.json  
+          选择后将自动把其中说话人数据填充到`说话人`选项里
+        dtype: file
+        method: select
+        value: ''
+        template: ' -c #{}'
+
+      - key: spk_list
+        name: 说话人
+        desc: |
+          合成目标说话人，可多选。  
+          为空则默认取训练的第一个说话人，若多个值则每个说话人都推理一遍所有的输入音频，共 `说话人数 * 输入音频数` 个结果
+        dtype: string
+        method: radio
+        multiple: true
+        value: []
+        template: '-s #{"#{}"}{ }'
+
+      - key: use_spk_mix
+        name: 说话人融合
+        desc: 是否使用说话人融合功能。注意，如果开启该选项要需要手动编辑项目目录下面的 `spkmix.py` 文件，明确指定角色混合比例。
+        dtype: boolean
+        method: switch
+        value: false
+        template: ' -usm'
+
+      - key: auto_predict_f0
+        name: 自动预测音高
+        desc: 语音转换时自动预测音高，转换歌声时不要打开（会严重跑调）
+        dtype: boolean
+        method: switch
+        value: false
+        template: ' -a'
+
+      - key: vocal_register_shift_key
+        name: 音区偏移
+        desc: 音区偏移量 (单位半音)，只对 pc 声码器有效。输入正值表示先降低（音高调整指定的）目标 key 推理再让声码器升回来。当启用 自动预测音高 时该参数无效
+        dtype: number
+        method: slide
+        min: -12
+        max: 12
+        step: 1
+        value: 0
+        template: ' -v #{}'
+        
+      - key: f0_predictor
+        name: F0 预测器
+        desc: 可选择crepe、pm、dio、harvest、rmvpe、fcpe，注意：crepe为原F0使用均值滤波器
+        dtype: string
+        method: radio
+        value: rmvpe
+        options:
+          - crepe
+          - pm
+          - dio
+          - harvest
+          - rmvpe
+          - fcpe
+        template: ' -f0p #{}'
+
+      - key: clip
+        name: 音频切片长度
+        desc: 规定了每个音频切片的时长，0 为自动切片，单位为秒
+        dtype: number
+        method: input
+        value: 0
+        template: ' -cl #{}'
+
+      - key: shallow_diffusion
+        name: 浅层扩散
+        desc: 使用浅层扩散可解决部分电音问题，启用后将禁用 NSF_HIFIGAN 增强器
+        dtype: boolean
+        method: switch
+        value: false
+        template: ' -shd'
+
+      - key: enhance
+        name: NSF_HIFIGAN 增强
+        desc: 是否使用NSF_HIFIGAN增强器。对部分训练集少的模型有一定的音质增强效果，但是对训练好的模型有反面效果，默认关闭
+        dtype: boolean
+        method: switch
+        value: false
+        template: ' --enhance'
+
+      - key: linear_gradient
+        name: 交叉淡入
+        desc: 两段音频切片的交叉淡入长度，如果强制切片后出现人声不连贯可调整该数值，如果连贯建议采用默认值0，单位为秒
+        dtype: number
+        method: input
+        value: 0
+        template: ' -lg #{}'
+
+      - key: loudness_envelope_adjustment
+        name: 响度包络融合
+        desc: 输入源响度包络替换输出响度包络的融合比例，越靠近 1 越使用输出响度包络
+        dtype: number
+        method: input
+        value: 1
+        template: ' -lea #{}'
+
+      - key: cluster_model_path
+        name: 聚类模型路径
+        desc: 聚类模型或特征检索索引路径，留空则自动设为各方案模型的默认路径，如果没有训练聚类或特征检索则随便填
+        dtype: file
+        method: select|resolve
+        dir: *sov_dir
+        template: ' -cm #{}'
+
+      - key: cluster_infer_ratio
+        name: 混合比例
+        desc: 聚类方案或特征检索占比 (0-1)，若没有训练聚类模型或特征检索则默认0即可
+        dtype: number
+        method: slide
+        min: 0
+        max: 1
+        step: 0.01
+        value: 0
+        template: ' -cr #{}'
+
+      - key: feature_retrieval
+        name: 特征检索
+        desc: 是否使用特征检索，如果使用将禁用聚类模型，且 -cm 与 -cr 参数将会变成特征检索的索引路径与混合比例
+        dtype: boolean
+        method: switch
+        value: false
+        template: ' -fr'
+
+      # 浅扩散设置
+      - key: diffusion_model_path
+        name: 扩散模型路径
+        desc: 扩散模型权重文件路径
+        dtype: file
+        method: select
+        value: 'exp/default/diffusion/model_0.pt'
+        template: ' -dm #{}'
+
+      - key: config_diff_path
+        name: 扩散配置文件
+        desc: 扩散模型配置文件路径，留空则自动使用 model 目录下的 config_diff.yaml
+        dtype: file
+        method: select
+        value: ''
+        dir: *sov_exp_dir
+        template: ' -dc #{config_diff_path}'
+
+      - key: k_step
+        name: 扩散步数
+        desc: 扩散步数，越大越接近扩散模型结果，默认 100
+        dtype: number
+        method: slide
+        min: 0
+        max: 100
+        step: 1
+        value: 100
+        template: ' -ks #{}'
+
+      - key: second_encoding
+        name: 二次编码
+        desc: 浅扩散前对原始音频进行二次编码，玄学选项，有时候效果好，有时候效果差
+        dtype: boolean
+        method: switch
+        value: false
+        template: ' -se'
+
+      - key: only_diffusion
+        name: 纯扩散模式
+        desc: 纯扩散模式，不加载 sovits 模型，仅使用扩散模型推理
+        dtype: boolean
+        method: switch
+        value: false
+        template: ' -od'
+
+      # 较固定的部分
+      - key: slice_db
+        name: 切片阈值
+        desc: 切片音量阈值，默认 -40，嘈杂音频可 -30，干声保留呼吸可 -50
+        dtype: number
+        method: slide
+        min: -70
+        max: -10
+        gap: 5
+        value: -40
+        template: ' -sd #{}'
+
+      - key: wav_format
+        name: 输出格式
+        desc: 音频输出文件格式
+        dtype: string
+        method: select
+        value: flac
+        options: [flac, wav, mp3]
+        template: ' -wf #{}'
+
+      - key: enhancer_adaptive_key
+        name: 增强器音域适应
+        desc: 使增强器适应更高的音域 (半音数)
+        dtype: number
+        method: slide
+        min: -12
+        max: 12
+        step: 1
+        value: 0
+        template: ' -eak #{}'
+
+      - key: device
+        name: 推理设备
+        desc: 推理设备，留空则自动选择 CPU 或 GPU
+        dtype: string
+        method: input
+        value: ~
+        template: ' -d #{}'
+
+      - key: vocoder_type
+        name: 声码器类型
+        desc: nsf-hifigan等，一般无更改必要
+        dtype: string
+        method: input
+        value: nsf-hifigan
+        template: ' --vocoder_type #{}'
+
+      - key: vocoder_ckpt_path
+        name: 声码器权重路径
+        desc: 对应vocoder_type的权重路径
+        dtype: file
+        method: select|resolve
+        dir: *sov_dir
+        value: ~
+        template: ' --vocoder_ckpt_path #{}'
+
+      - key: noice_scale
+        name: 噪音级别
+        desc: 噪音级别参数，影响咬字和音质，较为玄学
+        dtype: number
+        method: input
+        value: 0.4
+        template: ' -ns #{}'
+
+      - key: pad_seconds
+        name: 填充秒数
+        desc: 推理音频前后填充的静音秒数，避免开头结尾异响
+        dtype: number
+        method: input
+        value: 0.5
+        template: ' -p #{}'
+
+      - key: linear_gradient_retain
+        name: 交叉保留比例
+        desc: 自动音频切片后，需要舍弃每段切片的头尾。该参数设置交叉长度保留的比例，范围0~1，左开右闭
+        dtype: number
+        method: slide
+        min: 0
+        max: 1
+        step: 0.01
+        value: 0.75
+        template: ' -lgr #{}'
+
+      - key: f0_filter_threshold
+        name: F0 过滤阈值
+        desc: F0 过滤阈值 (0-1)，只有使用 crepe 时有效，降低可减少跑调但增加哑音
+        dtype: number
+        method: slide
+        min: 0
+        max: 1
+        step: 0.01
+        value: 0.05
+        template: ' -ft #{}'

@@ -6,6 +6,7 @@ import { fetchFlow } from '@/apis/project'
 const [data, setData] = createStore<Record<string, Flow>>({})
 const [isLoading, setIsLoading] = createSignal(false)
 const [error, setError] = createSignal<string | null>(null)
+const loadedTempArgs = new Set<string>()
 
 export function useFlowStore() {
   const load = (fobj: Flow) => {
@@ -35,6 +36,14 @@ export function useFlowStore() {
     return f
   }
 
+  const markTempArgsLoaded = (flowKey: string, branchKey: string) => {
+    loadedTempArgs.add(`${flowKey}.${branchKey}`)
+  }
+
+  const isTempArgsLoaded = (flowKey: string, branchKey: string) => {
+    return loadedTempArgs.has(`${flowKey}.${branchKey}`)
+  }
+
   return {
     isLoading,
     fetch,
@@ -43,5 +52,7 @@ export function useFlowStore() {
     load,
     error,
     setError,
+    markTempArgsLoaded,
+    isTempArgsLoaded,
   }
 }

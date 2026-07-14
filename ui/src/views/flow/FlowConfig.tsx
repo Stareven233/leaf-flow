@@ -9,6 +9,7 @@ import { useDecodedParams } from '@/utils/hooks/useDecodedParams'
 import { useScroll } from '@/utils/hooks/useScroll'
 import { resolveFlowBranch } from '@/utils/config'
 import { fetchProject } from '@/apis/project'
+import dBind from '@/utils/dynamicBind'
 
 const FlowConfig: Component = () => {
   const params = useDecodedParams()
@@ -38,8 +39,62 @@ const FlowConfig: Component = () => {
     return f && branchIndex !== -1 ? f.branches[branchIndex] : null
   }
 
+  const handleSetFlowMeta = (key: string, updates: Partial<Argument>) => {
+    const f = flow()
+    if (!f?.meta) {
+      return
+    }
+    const fkey = params.flow!
+
+    for (const [k, v] of Object.entries(updates)) {
+      flowStore.set(fkey, 'meta', key, k as keyof Argument, v as any)
+    }
+
+    const changedKeys = Object.keys(updates)
+    if (changedKeys.length > 0) {
+      for (let bIndex = 0; bIndex < f.branches.length; bIndex++) {
+        const branch = f.branches[bIndex]
+        for (let mIndex = 0; mIndex < branch.modules.length; mIndex++) {
+          const mobj = branch.modules[mIndex]
+          const cacheKey = dBind.uniqueKey('F', fkey, branch.key, mobj.key)
+          const setFunc = flowStore.set.bind(
+            null,
+            fkey,
+            'branches',
+            bIndex,
+            'modules',
+            mIndex,
+            'arguments',
+          )
+
+          const virtualArg = { key } as any
+          dBind.update(cacheKey, setFunc, mobj, virtualArg, changedKeys, f.meta, branch.meta)
+        }
+      }
+    }
+  }
+
   const updateFlowMeta = (key: string, value: Argument) => {
-    flowStore.set(params.flow!, 'meta', key, value)
+    const f = flow()
+    if (!f?.meta) {
+      return
+    }
+    const oldValue = f.meta[key]
+
+    const updates: Partial<Argument> = {}
+    if (oldValue) {
+      for (const k of Object.keys(value) as (keyof Argument)[]) {
+        if (value[k] !== oldValue[k]) {
+          updates[k] = value[k] as any
+        }
+      }
+    } else {
+      Object.assign(updates, value)
+    }
+
+    if (Object.keys(updates).length > 0) {
+      handleSetFlowMeta(key, updates)
+    }
   }
 
   const deleteFlowMeta = (key: string) => {
@@ -65,12 +120,61 @@ const FlowConfig: Component = () => {
     flowStore.set(params.flow!, 'meta', { ...meta, [key]: newAobj })
   }
 
-  const updateBranchMeta = (key: string, value: Argument) => {
+  const handleSetBranchMeta = (key: string, updates: Partial<Argument>) => {
     const branchIndex = getSelectedBranchIndex()
-    if (branchIndex === -1) {
+    const branch = getSelectedBranch()
+    const f = flow()
+    if (branchIndex === -1 || !branch?.meta || !f) {
       return
     }
-    flowStore.set(params.flow!, 'branches', branchIndex, 'meta', key, value)
+    const fkey = params.flow!
+
+    for (const [k, v] of Object.entries(updates)) {
+      flowStore.set(fkey, 'branches', branchIndex, 'meta', key, k as keyof Argument, v as any)
+    }
+
+    const changedKeys = Object.keys(updates)
+    if (changedKeys.length > 0) {
+      for (let mIndex = 0; mIndex < branch.modules.length; mIndex++) {
+        const mobj = branch.modules[mIndex]
+        const cacheKey = dBind.uniqueKey('F', fkey, branch.key, mobj.key)
+        const setFunc = flowStore.set.bind(
+          null,
+          fkey,
+          'branches',
+          branchIndex,
+          'modules',
+          mIndex,
+          'arguments',
+        )
+
+        const virtualArg = { key } as any
+        dBind.update(cacheKey, setFunc, mobj, virtualArg, changedKeys, f.meta, branch.meta)
+      }
+    }
+  }
+
+  const updateBranchMeta = (key: string, value: Argument) => {
+    const branch = getSelectedBranch()
+    if (!branch?.meta) {
+      return
+    }
+    const oldValue = branch.meta[key]
+
+    const updates: Partial<Argument> = {}
+    if (oldValue) {
+      for (const k of Object.keys(value) as (keyof Argument)[]) {
+        if (value[k] !== oldValue[k]) {
+          updates[k] = value[k] as any
+        }
+      }
+    } else {
+      Object.assign(updates, value)
+    }
+
+    if (Object.keys(updates).length > 0) {
+      handleSetBranchMeta(key, updates)
+    }
   }
 
   const deleteBranchMeta = (key: string) => {

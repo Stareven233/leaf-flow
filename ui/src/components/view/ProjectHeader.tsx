@@ -83,7 +83,7 @@ export default function ProjectHeader(props: ProjectHeaderProps) {
       exportFile(fileName, yamlString)
     } else {
       const configData = configStore.data()
-      const p = pathJoin(configData?.budDir || './leaf', dir || '', fileName)
+      const p = pathJoin(configData?.budDir || './bud', dir || '', fileName)
       await createEntry(p, false, yamlString, true)
     }
     setShowExportDialog(false)
@@ -153,7 +153,7 @@ export default function ProjectHeader(props: ProjectHeaderProps) {
         prompt="请输入要保存的配置文件名"
         placeholder="例如：taffy.yaml"
         filename={yamlName()}
-        dirOptions={['base', '<no>']}
+        dirOptions={['leaf', '<no>']}
         onFilenameChange={setYamlName}
         onCancel={() => setShowExportDialog(false)}
         onConfirm={confirmExport}

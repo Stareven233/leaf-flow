@@ -29,7 +29,7 @@ const App: Component<RouteSectionProps> = (props) => {
       <MessageContainer />
       {}
       <nav class="bg-white border-b border-gray-200 shadow-sm">
-        <div class="container mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="w-full max-w-420 mx-auto px-4 sm:px-6 lg:px-8">
           <div class="flex justify-between h-16">
             <div class="flex items-center">
               <A href="/" class={'text-xl font-bold px-3 py-2' + anchorCls}>
@@ -46,24 +46,34 @@ const App: Component<RouteSectionProps> = (props) => {
       </nav>
 
       {}
-      <main class="container mx-auto py-6 px-4 grow flex flex-col">{props.children}</main>
+      <main class="w-full max-w-420 mx-auto py-6 px-4 sm:px-6 lg:px-8 grow flex flex-col">
+        {props.children}
+      </main>
 
       {}
       <div class="fixed bottom-0 left-0 right-0 h-4 group" onClick={() => setFooterOpen((v) => !v)}>
         <footer
           class={`absolute bottom-0 left-0 right-0 bg-white border-t border-gray-200 py-3 transition-transform duration-300 ${footerOpen() ? 'translate-y-0' : 'translate-y-full group-hover:translate-y-0'}`}
         >
-          <div class="container mx-auto px-4 sm:px-6 lg:px-8 text-center text-gray-600 text-sm">
+          <div class="w-full max-w-420 mx-auto px-4 sm:px-6 lg:px-8 text-center text-gray-600 text-sm">
             <a
-              href="https://github.com/Stareven233"
+              href="https://space.bilibili.com/1610042298"
               target="_blank"
               rel="noopener noreferrer"
               class={anchorCls}
             >
               獭栖八雫
             </a>
-            © Leaf² | a <b>l</b>ightweight <b>ea</b>sy <b>f</b>ast and <b>f</b>lexible execution
-            framework
+            ©
+            <a
+              href="https://github.com/Stareven233/leaf-flow"
+              target="_blank"
+              rel="noopener noreferrer"
+              class={anchorCls}
+            >
+              Leaf²
+            </a>
+            | a <b>l</b>ightweight <b>ea</b>sy <b>f</b>ast and <b>f</b>lexible execution framework
           </div>
         </footer>
       </div>

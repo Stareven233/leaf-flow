@@ -20,9 +20,16 @@ const SelectInput: Component<ArgumentInputProps> = (props) => {
     }
     const query = searchQuery().toLowerCase()
     return (
-      props.argument.options?.filter((opt) => opt.toString().toLowerCase().includes(query)) || []
+      props.argument.options?.filter((opt) => formatOption(opt).toLowerCase().includes(query)) || []
     )
   })
+
+  const formatOption = (option: ArgumentValue): string => {
+    if (typeof option === 'boolean') {
+      return option ? '是' : '否'
+    }
+    return String(option)
+  }
 
   const toggleDropdown = () => {
     setIsOpen(!isOpen())
@@ -60,7 +67,9 @@ const SelectInput: Component<ArgumentInputProps> = (props) => {
             'text-gray-500': !props.argument.value,
           }}
         >
-          {!props.argument.value ? '请选择' : props.argument.value}
+          {props.argument.value === undefined
+            ? '请选择'
+            : formatOption(props.argument.value as ArgumentValue)}
         </span>
         <SimpleArrowDownIcon
           class="text-gray-500 transition-transform"
@@ -108,7 +117,7 @@ const SelectInput: Component<ArgumentInputProps> = (props) => {
                   'bg-green-50 text-green-700': props.argument.value === option,
                 }}
               >
-                {option}
+                {formatOption(option)}
               </li>
             )}
           </For>

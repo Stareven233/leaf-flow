@@ -7,6 +7,7 @@ import dBind from '@/utils/dynamicBind'
 const [data, setData] = createStore<Record<string, Project>>({})
 const [isLoading, setIsLoading] = createSignal(false)
 const [error, setError] = createSignal<string | null>(null)
+const loadedTempArgs = new Set<string>()
 
 export function useProjectStore() {
   const load = (pobj: Project) => {
@@ -45,13 +46,18 @@ export function useProjectStore() {
         aSet.add(argument.key)
       }
       mSet.add(mkey)
-      const _set: ArgumentSetter = setData.bind(null, pkey, 'modules', mIndex, 'arguments')
-      const key = dBind.uniqueKey('P', pkey, mkey)
-      dBind.init(key, _set, mobj)
       mIndex++
     }
 
     setData(pkey, pobj)
+
+    mIndex = 0
+    for (const mobj of pobj.modules) {
+      const _set: ArgumentSetter = setData.bind(null, pkey, 'modules', mIndex, 'arguments')
+      const key = dBind.uniqueKey('P', pkey, mobj.key)
+      dBind.init(key, _set, mobj, pobj.meta)
+      mIndex++
+    }
     setIsLoading(false)
   }
 
@@ -76,6 +82,14 @@ export function useProjectStore() {
     return p
   }
 
+  const markTempArgsLoaded = (projectKey: string, moduleKey: string) => {
+    loadedTempArgs.add(`${projectKey}.${moduleKey}`)
+  }
+
+  const isTempArgsLoaded = (projectKey: string, moduleKey: string) => {
+    return loadedTempArgs.has(`${projectKey}.${moduleKey}`)
+  }
+
   return {
     isLoading,
     fetch,
@@ -84,5 +98,7 @@ export function useProjectStore() {
     load,
     error,
     setError,
+    markTempArgsLoaded,
+    isTempArgsLoaded,
   }
 }

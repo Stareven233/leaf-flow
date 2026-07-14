@@ -113,7 +113,9 @@ const PathInput: Component<ArgumentInputProps> = (props) => {
     }
 
     if (toUpdate) {
-      await setPathArgument({ value: selected })
+      const lastPath = Array.isArray(selected) ? selected[selected.length - 1] : selected
+      const [dir] = path.split(lastPath)
+      await setPathArgument({ value: selected, dir })
     }
 
     return selected
@@ -150,12 +152,35 @@ const PathInput: Component<ArgumentInputProps> = (props) => {
     })
     setHistoryFiles(Array.from(files))
 
+    let initialDir = props.argument.dir
+    const currentValue = props.argument.value
+    const marker = configStore.data()?.mmapMarker
+
+    if (currentValue) {
+      let lastPath: string | undefined
+      if (Array.isArray(currentValue)) {
+        const validPaths = currentValue.filter(
+          (item) => typeof item === 'string' && item !== marker,
+        ) as string[]
+        lastPath = validPaths[validPaths.length - 1]
+      } else if (typeof currentValue === 'string' && currentValue !== marker) {
+        lastPath = currentValue
+      }
+
+      if (lastPath) {
+        const [dir] = path.split(lastPath)
+        initialDir = dir
+      }
+    }
+
     if (shouldResolvePath()) {
-      await setPathArgument({ dir: props.argument.dir, value: props.argument.value })
+      await setPathArgument({ dir: initialDir, value: props.argument.value })
+    } else if (initialDir !== props.argument.dir) {
+      props.setArgument({ dir: initialDir })
     }
 
     if (props.argument.method === 'mmap' && props.argument.value === undefined) {
-      toggleMmap()
+      enableMmap(true)
     }
   })
 
@@ -199,24 +224,38 @@ const PathInput: Component<ArgumentInputProps> = (props) => {
     }
     const arr = [...(props.argument.value as string[])]
     arr.splice(index, 1)
+
+    if (arr.length > 0) {
+      const marker = configStore.data()?.mmapMarker
+      const validPaths = arr.filter(
+        (item) => typeof item === 'string' && item !== marker,
+      ) as string[]
+      if (validPaths.length > 0) {
+        const lastPath = validPaths[validPaths.length - 1]
+        const [dir] = path.split(lastPath)
+        setPathArgument({ value: arr, dir })
+        return
+      }
+    }
+
     setPathArgument({ value: arr })
   }
 
-  const toggleMmap = () => {
+  const enableMmap = (enable: boolean) => {
     const marker = configStore.data()?.mmapMarker
     if (!marker) {
       return
     }
     const v = props.argument.value
 
-    if (isMmapEnabled()) {
+    if (!enable && isMmapEnabled()) {
       if (!props.argument.multiple && v === marker) {
         setPathArgument({ value: '' })
       } else {
         const arr = Array.isArray(v) ? v.filter((item) => item !== marker) : []
         setPathArgument({ value: arr })
       }
-    } else {
+    } else if (enable && !isMmapEnabled()) {
       if (!props.argument.multiple) {
         setPathArgument({ value: marker })
       } else {
@@ -243,7 +282,7 @@ const PathInput: Component<ArgumentInputProps> = (props) => {
               type="button"
               role="switch"
               aria-checked={isMmapEnabled()}
-              onClick={toggleMmap}
+              onClick={() => enableMmap(!isMmapEnabled())}
               class={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors duration-200 ${isMmapEnabled() ? 'bg-green-400' : 'bg-gray-300'}`}
             >
               <span

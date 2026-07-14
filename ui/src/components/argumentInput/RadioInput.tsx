@@ -48,6 +48,13 @@ const RadioInput: Component<ArgumentInputProps> = (props) => {
 
   const selectedValues = createMemo(normalizeValue)
 
+  const formatOption = (option: ArgumentValue): string => {
+    if (typeof option === 'boolean') {
+      return option ? '是' : '否'
+    }
+    return String(option)
+  }
+
   const isAllSelected = createMemo(() => {
     if (!isMultiple()) return false
     const options = props.argument.options ?? []
@@ -83,7 +90,7 @@ const RadioInput: Component<ArgumentInputProps> = (props) => {
                   : props.argument.value !== option,
               }}
             >
-              {option}
+              {formatOption(option)}
             </div>
           )}
         </For>

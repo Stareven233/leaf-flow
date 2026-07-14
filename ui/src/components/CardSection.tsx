@@ -1,6 +1,5 @@
 import type { JSX } from 'solid-js'
 import { Show } from 'solid-js'
-import { useScroll } from '@/utils/hooks/useScroll'
 
 interface CardSectionProps {
   title: string
@@ -8,29 +7,51 @@ interface CardSectionProps {
   emptyText?: string
   hasItems: boolean
   children: JSX.Element
+
+  noMatchText?: string
+
+  filterNoMatch?: boolean
+
+  countLabel?: string
+
+  sectionRef?: (el: HTMLElement) => void
 }
 
 export default function CardSection(props: CardSectionProps) {
-  const scroll = useScroll()
-
-  return (
-    <Show
-      when={props.hasItems}
-      fallback={
-        props.emptyText ? (
-          <div class="bg-white rounded-lg shadow p-6">
-            <h2 class="text-xl font-semibold mb-4">{props.title}</h2>
-            <div class="col-span-full text-center py-8 text-gray-500">{props.emptyText}</div>
-          </div>
-        ) : null
-      }
-    >
-      <div class="bg-white rounded-lg shadow p-6">
-        <h2 class="text-xl font-semibold mb-4">{props.title}</h2>
-        <div ref={scroll.ref} class="flex gap-4 pb-4">
+  const body = () => {
+    if (props.filterNoMatch) {
+      return (
+        <div class="col-span-full text-center py-8 text-gray-500">
+          {props.noMatchText ?? '无匹配'}
+        </div>
+      )
+    }
+    if (props.hasItems) {
+      return (
+        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
           {props.children}
         </div>
-      </div>
+      )
+    }
+    if (props.emptyText) {
+      return <div class="col-span-full text-center py-8 text-gray-500">{props.emptyText}</div>
+    }
+    return null
+  }
+
+  const visible = () => props.hasItems || props.filterNoMatch || !!props.emptyText
+
+  return (
+    <Show when={visible()}>
+      <section ref={props.sectionRef} class="bg-white rounded-lg shadow p-6 scroll-mt-4">
+        <h2 class="text-xl font-semibold mb-4 flex items-baseline gap-2">
+          <span>{props.title}</span>
+          <Show when={props.countLabel}>
+            <span class="text-sm font-normal text-gray-400">{props.countLabel}</span>
+          </Show>
+        </h2>
+        {body()}
+      </section>
     </Show>
   )
 }

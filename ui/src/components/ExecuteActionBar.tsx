@@ -19,6 +19,8 @@ interface ActionBarProps {
 }
 
 export default function ExecuteActionBar(props: ActionBarProps) {
+  const scroll = useScroll({ direction: 'vertical' })
+
   return (
     <>
       {}
@@ -28,7 +30,7 @@ export default function ExecuteActionBar(props: ActionBarProps) {
 
       <section
         ref={props.actionSectionRef}
-        class={`mx-auto p-6 bg-white shadow-sm rounded-lg container ${
+        class={`mx-auto p-6 bg-white shadow-sm rounded-lg w-full max-w-420 ${
           props.isSticky
             ? 'fixed bottom-4 left-1/2 -translate-x-1/2 z-2 shadow-xl border border-gray-100'
             : 'mt-6'
@@ -82,19 +84,22 @@ export default function ExecuteActionBar(props: ActionBarProps) {
                 <DeleteIcon class="text-gray-600" />
               </NButton>
               <p class="text-sm text-gray-600 mb-3">命令预览：</p>
-              <For each={props.previewCommands}>
-                {(cmd, index) => {
-                  const scroll = useScroll()
-                  return (
-                    <div class="mb-3 last:mb-0 text-sm flex items-center">
-                      <span class="mr-2 text-gray-600 select-none">{index() + 1}#</span>
-                      <span ref={scroll.ref} class="bg-white p-2 py-1 rounded-md">
-                        {cmd}
-                      </span>
-                    </div>
-                  )
-                }}
-              </For>
+              {}
+              <div ref={scroll.ref} class="max-h-60">
+                <For each={props.previewCommands}>
+                  {(cmd, index) => {
+                    const itemScroll = useScroll()
+                    return (
+                      <div class="mb-3 last:mb-0 text-sm flex items-center">
+                        <span class="mr-2 text-gray-600 select-none">{index() + 1}#</span>
+                        <div ref={itemScroll.ref} class="bg-white p-2 py-1 rounded-md">
+                          {cmd}
+                        </div>
+                      </div>
+                    )
+                  }}
+                </For>
+              </div>
             </Show>
           </div>
         </Show>

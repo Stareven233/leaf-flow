@@ -9,6 +9,21 @@ interface NMarkdownProps {
   theme?: NMarkdownTheme
 }
 
+const RE_BLANK_LINE = /^\s*$/
+const RE_FENCE_START = /^```([\w-]*)\s*$/
+const RE_FENCE_END = /^```\s*$/
+const RE_HEADING = /^(#{1,6})(?:[ \t]+)?(.+)$/
+const RE_HR = /^\s*([-*_])\1{2,}\s*$/
+const RE_BLOCKQUOTE = /^>\s?/
+const RE_UNORDERED_LIST = /^\s*[-*+]\s+.+$/
+const RE_ORDERED_LIST = /^\s*\d+\.\s+.+$/
+const RE_INLINE_CODE = /`([^`\n]+)`/g
+const RE_LINK = /\[([^\]]+)\]\(([^)]+)\)/g
+const RE_STRIKE = /~~(.+?)~~/g
+const RE_BOLD_STAR = /\*\*(.+?)\*\*/g
+const RE_ITALIC_STAR = /\*([^*\n]+)\*/g
+const RE_HARD_BREAK = / {2,}$/
+
 const escapeHtml = (value: string) =>
   value
     .replace(/&/g, '&amp;')
@@ -21,22 +36,19 @@ const renderInline = (raw: string) => {
   let text = escapeHtml(raw)
   const inlineCode: string[] = []
 
-  text = text.replace(/`([^`\n]+)`/g, (_, code: string) => {
-    const token = `\uE000INLINECODE${inlineCode.length}\uE001`
+  text = text.replace(RE_INLINE_CODE, (_, code: string) => {
+    const token = `INLINECODE${inlineCode.length}`
     inlineCode.push(`<code>${code}</code>`)
     return token
   })
 
-  text = text.replace(
-    /\[([^\]]+)\]\(([^)]+)\)/g,
-    '<a href="$2" target="_blank" rel="noopener">$1</a>',
-  )
-  text = text.replace(/~~(.+?)~~/g, '<del>$1</del>')
-  text = text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-  text = text.replace(/\*([^*\n]+)\*/g, '<em>$1</em>')
+  text = text.replace(RE_LINK, '<a href="$2" target="_blank" rel="noopener">$1</a>')
+  text = text.replace(RE_STRIKE, '<del>$1</del>')
+  text = text.replace(RE_BOLD_STAR, '<strong>$1</strong>')
+  text = text.replace(RE_ITALIC_STAR, '<em>$1</em>')
 
   inlineCode.forEach((code, index) => {
-    text = text.replace(`\uE000INLINECODE${index}\uE001`, code)
+    text = text.replace(`INLINECODE${index}`, code)
   })
 
   return text
@@ -46,8 +58,8 @@ const renderParagraph = (lines: string[]) => {
   const segments: string[] = []
 
   lines.forEach((line, index) => {
-    const hardBreak = / {2,}$/.test(line)
-    const cleanLine = line.replace(/ {2,}$/, '')
+    const hardBreak = RE_HARD_BREAK.test(line)
+    const cleanLine = line.replace(RE_HARD_BREAK, '')
     segments.push(renderInline(cleanLine))
 
     if (index < lines.length - 1) {
@@ -58,12 +70,12 @@ const renderParagraph = (lines: string[]) => {
   return `<p>${segments.join('')}</p>`
 }
 
-const isFenceStart = (line: string) => /^```([\w-]*)\s*$/.test(line)
-const isHeading = (line: string) => /^(#{1,6})(?:[ \t]+)?(.+)$/.test(line)
-const isHr = (line: string) => /^\s*([-*_])\1{2,}\s*$/.test(line)
-const isBlockquote = (line: string) => /^>\s?/.test(line)
-const isUnorderedList = (line: string) => /^\s*[-*+]\s+.+$/.test(line)
-const isOrderedList = (line: string) => /^\s*\d+\.\s+.+$/.test(line)
+const isFenceStart = (line: string) => RE_FENCE_START.test(line)
+const isHeading = (line: string) => RE_HEADING.test(line)
+const isHr = (line: string) => RE_HR.test(line)
+const isBlockquote = (line: string) => RE_BLOCKQUOTE.test(line)
+const isUnorderedList = (line: string) => RE_UNORDERED_LIST.test(line)
+const isOrderedList = (line: string) => RE_ORDERED_LIST.test(line)
 const isBlockStart = (line: string) =>
   isFenceStart(line) ||
   isHeading(line) ||
@@ -86,14 +98,14 @@ export const NMarkdown: Component<NMarkdownProps> = (props) => {
     while (i < lines.length) {
       const line = lines[i]
 
-      if (/^\s*$/.test(line)) {
+      if (RE_BLANK_LINE.test(line)) {
         if (!preserveBlankLines) {
           i += 1
           continue
         }
 
         let blankCount = 0
-        while (i < lines.length && /^\s*$/.test(lines[i])) {
+        while (i < lines.length && RE_BLANK_LINE.test(lines[i])) {
           blankCount += 1
           i += 1
         }
@@ -104,18 +116,18 @@ export const NMarkdown: Component<NMarkdownProps> = (props) => {
         continue
       }
 
-      const fence = line.match(/^```([\w-]*)\s*$/)
+      const fence = line.match(RE_FENCE_START)
       if (fence) {
         const language = fence[1] || 'text'
         const codeLines: string[] = []
         i += 1
 
-        while (i < lines.length && !/^```\s*$/.test(lines[i])) {
+        while (i < lines.length && !RE_FENCE_END.test(lines[i])) {
           codeLines.push(lines[i])
           i += 1
         }
 
-        if (i < lines.length && /^```\s*$/.test(lines[i])) {
+        if (i < lines.length && RE_FENCE_END.test(lines[i])) {
           i += 1
         }
 
@@ -125,7 +137,7 @@ export const NMarkdown: Component<NMarkdownProps> = (props) => {
         continue
       }
 
-      const heading = line.match(/^(#{1,6})(?:[ \t]+)?(.+)$/)
+      const heading = line.match(RE_HEADING)
       if (heading) {
         const level = heading[1].length
         blocks.push(`<h${level}>${renderInline(heading[2].trim())}</h${level}>`)
@@ -171,7 +183,7 @@ export const NMarkdown: Component<NMarkdownProps> = (props) => {
       }
 
       const paragraphLines: string[] = []
-      while (i < lines.length && !/^\s*$/.test(lines[i]) && !isBlockStart(lines[i])) {
+      while (i < lines.length && !RE_BLANK_LINE.test(lines[i]) && !isBlockStart(lines[i])) {
         paragraphLines.push(lines[i])
         i += 1
       }

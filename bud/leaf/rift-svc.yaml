@@ -1,0 +1,582 @@
+name: RIFT-SVC
+desc: |
+  RIFT-SVC是一种基于Rectified Flow Transformer的歌声转换模型实现。我们测试了几种相对于基础Diffusion Transformer的架构和训练改进。  
+  在线测试（七海Nana7mi）：[https://huggingface.co/spaces/Pur1zumu/RIFT-SVC-Nanami](https://huggingface.co/spaces/Pur1zumu/RIFT-SVC-Nanami)  
+meta:
+  rift_dir:
+    dtype: directory
+    method: select|resolve
+    value: &rift_dir ./library/RIFT-SVC
+  rift_exp_dir: 
+    dtype: directory
+    method: select|resolve
+    value: &rift_exp_dir ./library/RIFT-SVC/exp
+  python:
+    dtype: file
+    method: select|resolve
+    value: ./bin/venv-svc/Scripts/python.exe
+
+modules:
+  - key: download-pretrain
+    name: 下载预训练权重
+    shell: ps
+    desc: |
+      下载预处理、训练所需的预训练权重  
+      `特征提取和声码器的预训练模型` 不会重复下载，包含：
+      1. [ContentVec](https://github.com/auspicious3000/contentvec)  （本模块下载）
+      2. [rmvpe](https://arxiv.org/abs/2306.15412)  （本模块下载）
+      3. [vocoder nsf_hifigan_44.1k_hop512_128bin_2024.02](https://github.com/openvpi/vocoders/releases) （本模块下载） / [vocoder pc_nsf_hifigan_44.1k_hop512_128bin_2025.02](https://github.com/openvpi/vocoders/releases)  （自行下载、置于`pretrained/vocoder/`，并在训练时`声码器`参数选择）
+
+      `rift预训练权重` 依赖wget下载，不支持断点续传，会重复下载，每次下载都会覆盖原本的
+    template:
+      - 'cd "#{rift_dir}"'
+      - '#{other}'
+      - '#{rift}'
+    arguments:
+      - key: other
+        name: 特征提取和声码器的预训练权重
+        desc: 下载特征提取和声码器的预训练权重
+        dtype: boolean
+        value: true
+        template: '& "#{python}" pretrained/download.py; New-Item -Path "pretrained/nsf_hifigan_44.1k_hop512_128bin_2024.02" -ItemType SymbolicLink -Value "pretrained/vocoder/nsf_hifigan_44.1k_hop512_128bin_2024.02"'
+
+      - key: rift
+        name: rift预训练权重
+        desc: 数字越大说明权重所占存储、显存越大，效果或许更好？
+        dtype: string
+        method: radio
+        options:
+          - dit-512-8
+          - dit-768-12
+          - dit-1024-16
+        value: dit-768-12
+        template: 'if (Test-Path pretrained/pretrain-v3_#{}.ckpt) { Write-Host "pretrain-v3_#{}.ckpt 已存在，跳过" } else { wget https://huggingface.co/Pur1zumu/RIFT-SVC-pretrained/resolve/main/pretrain-v3_#{}.ckpt -O pretrained/pretrain-v3_#{}.ckpt }'
+
+  - key: preprocess
+    name: 预处理
+    desc: |
+      训练之前必须进行数据预处理  
+      在此之前若音频太长应当进行切片处理  
+      对音频文件执行重采样和响度归一化处理、划分训练测试集、生成数据元信息、特征抽取
+    template:
+      - 'cd "#{rift_dir}"'
+      - '& "#{python}" scripts/resample_normalize_audios.py --src #{src} --dest #{dest} --target_sample_rate #{target_sample_rate} --target_loudness #{target_loudness} --max_workers #{num-workers} --headroom #{headroom} #{speakers}'
+      - '& "#{python}" scripts/prepare_data_meta.py --data-dir #{dest} #{num-test}#{seed}'
+      - '& "#{python}" scripts/prepare_mel.py --data-dir #{dest} --num-workers #{num-workers}'
+      - '& "#{python}" scripts/prepare_rms.py --data-dir #{dest} --num-workers #{num-workers}'
+      - '& "#{python}" scripts/prepare_f0.py --data-dir #{dest} --num-workers #{num-workers}'
+      - '& "#{python}" scripts/prepare_cvec.py --data-dir #{dest} --num-workers #{num-workers}'
+    arguments:
+      - key: src
+        name: 源数据目录
+        desc: 一个目录，其中包含所有用于训练的音频文件，此时该目录名为说话人；该目录下包含多个子目录，每个子目录为一个说话人，其中每个子目录都有音频文件  
+        dtype: directory
+        method: select|resolve
+        value: ~
+        required: true
+
+      - key: dest
+        name: 目标数据目录
+        desc: 目标目录路径，将在该目录下保存元数据信息json并逐个创建以说话人为名的子目录，每个子目录中输出预处理结果。一般选 rift_dir/data/xxx
+        dtype: directory
+        method: select|resolve
+        value: ~
+        required: true
+
+      - key: speakers
+        name: 目标说话人
+        desc: 待训练的说话人列表，用于过滤选取 `数据源目录` 中的子目录。放空表示 `数据源目录` 所有数据都用于训练
+        dtype: string
+        method: input
+        multiple: true
+        value: ~
+        template: '--speakers #{}'
+
+      - key: target_sample_rate
+        name: 目标采样率
+        desc: 期望的采样率（单位：Hz）  
+        dtype: number
+        method: input
+        value: 44100
+
+      - key: target_loudness
+        name: 目标响度
+        desc: 期望的响度（单位：LUFS）  
+        dtype: number
+        method: slide
+        min: -30
+        max: 0
+        step: 1
+        value: -18.0
+
+      - key: num-workers
+        name: 最大工作进程数
+        desc: 最大工作进程数量（为空则使用 CPU 核心数，不过目前leaf不支持null/nil/None，必须填写）
+        dtype: number
+        method: input
+        value: 2
+
+      - key: headroom
+        name: 预留余量
+        desc: 缩放后的最大绝对幅度，用于防止削波  
+        dtype: number
+        method: input
+        value: 0.99
+
+      - key: num-test
+        name: 测试样本数
+        desc: 适用于随机切分训练、测试集时指定测试集样本数
+        dtype: number
+        method: input
+        value: 20
+        template: ' --num-test #{}'
+
+      - key: seed
+        name: 随机种子
+        desc: 随机种子，用以复现结果
+        dtype: number
+        method: input
+        value: 233
+        template: ' --seed #{}'
+
+  - key: train
+    name: 训练
+    desc: |
+      训练之前必须进行数据预处理，并下载[预训练权重](https://github.com/Pur1zumu/RIFT-SVC/blob/master/README_CN.md#4-下载用于微调的预训练权重)，下载后放置于 `rift_dir/pretrained/` 使用  
+      **注**：本模块默认参数为 `dit-768-12` 模型设置，选用其他大小的模型应当相应调整学习率等参数。  
+      选择预处理处理好的数据目录（预训练选的`目标数据目录`），填写 `训练名称` 及其他所需参数即可开始训练  
+      修改 模型配置 里的 `config/model/dit-xx.yaml` 可以训练不同规模的模型，训练产物保存于 `rift_exp_dir`   
+    template:
+      - 'cd "#{rift_dir}"'
+      - '& "#{python}" train.py #{config} dataset.data_dir="#{data-dir}" training.run_name=#{run-name}#{learning-rate}#{num-workers}#{batch-size}#{grad-accumulation-steps}#{max-steps}#{test-per-steps}#{save-per-steps}#{weight-decay}#{decay-step}#{optimizer-type}#{vocoder-ckpt}#{time-schedule}#{freeze-adaln-and-tembed}#{drop-spk-prob}#{pretrained-path}#{resume-checkpoint}#{data-lazy}#{overrides}'
+    arguments:
+      - key: config
+        name: 模型配置
+        desc: 允许多选，将按顺序合并，后覆盖前。一般无需修改，可通过后续的参数定义训练行为。或者反过来直接调整配置文件也行
+        dtype: file
+        method: select
+        multiple: true
+        value:
+          - config/model/dit-base.yaml
+          - config/model/dit-768-12.yaml
+          - config/noe.yaml
+        template: '#{-c #{}}{ }'
+        required: true
+
+      - key: data-dir
+        name: 数据目录
+        desc: 用于训练的、预处理好的数据目录 `rift_dir/data/xxx`
+        dtype: directory
+        method: select|resolve
+        value: ~
+        dir: *rift_dir
+        required: true
+
+      - key: run-name
+        name: 训练名称
+        desc: 将以名称在 rift_dir/exp 下面生成子目录，用以存储本次训练的结果。若对应子目录已存在，里面的东西可能被覆盖
+        dtype: string
+        value: ~
+        required: true
+
+      - key: learning-rate
+        name: 学习率
+        desc: 越大训得更快，或者直接爆炸
+        dtype: number
+        step: 1e-5
+        value: 5e-5
+        template: ' training.learning_rate=#{}'
+
+      - key: num-workers
+        name: 最大工作进程数
+        desc: 最大工作进程数量（为空则使用 CPU 核心数，不过目前leaf不支持null/nil/None，必须填写）
+        dtype: number
+        method: input
+        value: 4
+        template: ' training.num_workers=#{}'
+
+      - key: batch-size
+        name: 训练批次大小
+        desc: 单卡情况下批大小。越大一次迭代加载使用的数据样本越多，训练越快，显存占用越大。v3_dit-768-12规模 +	32 batchsize ~10GB 显存占用
+        dtype: number
+        value: 32
+        template: ' training.batch_size_per_gpu=#{}'
+
+      - key: grad-accumulation-steps
+        name: 梯度累积
+        desc: 将n个批次（batch）的梯度累加起来，再进行一次权重更新。梯度累积可以模拟更大批量的训练效果，提升模型的训练稳定性和性能。训练时间可能会线性增长。
+        dtype: number
+        value: 1
+        template: ' training.grad_accumulation_steps=#{}'
+
+      - key: max-steps
+        name: 总训练步数
+        desc: 越大训练越久
+        dtype: number
+        value: 30000
+        template: ' training.max_steps=#{}'
+
+      - key: test-per-steps
+        name: 验证间隔
+        desc: 隔多少步（step）进行验证
+        dtype: number
+        value: 1000
+        template: ' training.test_per_steps=#{}'
+
+      - key: save-per-steps
+        name: 保存间隔
+        desc: 隔多少步（step）保存权重
+        dtype: number
+        value: 1000
+        template: ' training.save_per_steps=#{}'
+
+      - key: weight-decay
+        name: 权重衰减
+        desc: 本质为L2正则化，会限制模型的权重都会趋近于0，越大优化器越限制权重趋于零。用于保持权重在一个较小在的值，控制权重值的变化幅度，避免梯度爆炸
+        dtype: number
+        value: 0.01
+        template: ' training.weight_decay=#{}'
+
+      - key: decay-step
+        name: 学习率衰减点
+        desc: 单位step，当训练到达对应步数则进行学习率衰减
+        dtype: number
+        value: [2100, 6500, 12000]
+        multiple: true
+        template: ' training.decay_step="[#{#{}}{, }]"'
+
+      - key: optimizer-type
+        name: 优化器
+        desc: 用于模型优化
+        dtype: string
+        method: radio
+        value: adamwsf
+        options:
+          - adamwsf
+          - adamuon
+          - muon
+          - adamw
+        template: ' training.optimizer_type=#{}'
+
+      - key: vocoder-ckpt
+        name: 声码器
+        desc: 用于合成输出音频
+        dtype: file
+        method: select|resolve
+        value: ./library/RIFT-SVC/pretrained/vocoder/nsf_hifigan_44.1k_hop512_128bin_2024.02/model.ckpt
+        template: ' vocoder.ckpt=#{}'
+
+      - key: time-schedule
+        name: 噪声调度
+        desc: 扩散模型时间步采样方法
+        dtype: string
+        method: radio
+        option: [uniform, lognorm]
+        value: lognorm
+        template: ' training.time_schedule="#{}"'
+
+      - key: freeze-adaln-and-tembed
+        name: 冻结adaLN&时间嵌入
+        desc: |
+          是否冻结adaLN和时间嵌入。对于单一说话人训练，应将此设置为true以启用后续推理时的说话者音色增强。  
+          训练多说话人训练可以不动，也可以尝试解冻adaLN和时间嵌入，并设置 `随机丢弃说话人信息概率` 为0.2
+        dtype: boolean
+        value: true
+        template: ' training.freeze_adaln_and_tembed="#{}"'
+
+      - key: drop-spk-prob
+        name: 随机丢弃说话人信息概率
+        desc: 在训练时以一定概率随机丢弃（mask）说话人信息，0表示模型正常使用说话人信息，>0则以该概率丢弃信息。关联推理时的 `说话人引导强度` 参数，用于 CFG 采样，避免模型过度依赖说话人信息，提高泛化能力
+        dtype: number
+        method: slide
+        min: 0
+        max: 1
+        step: 0.01
+        value: 0
+        template: ' training.drop_spk_prob="#{}"'
+
+      - key: data-lazy
+        name: 数据懒加载
+        desc: '关闭: 在启动训练时将所有数据加载到内存，启动训练时需等待，之后速度快; 开启: 训练时即时加载'
+        dtype: boolean
+        value: false
+        template: ' dataset.lazy="#{}"'
+
+      - key: resume-checkpoint
+        name: 中断恢复权重
+        desc: 从某个中途保存的权重检查点开始继续训练
+        dtype: file
+        method: select
+        dir: *rift_dir
+        value: ~
+        template: ' training.resume_from_checkpoint="#{}"'
+
+      - key: pretrained-path
+        name: 预训练权重
+        desc: 模型预训练权重，使用有助于加快收敛。所选权重必须与配置对应，通常 `模型配置` 指定的配置文件中已指定
+        dtype: file
+        method: select
+        dir: *rift_dir
+        value: ~
+        template: ' training.pretrained_path="#{}"'
+
+      - key: overrides
+        name: 其他覆盖参数
+        desc: 可选覆盖其他未提及、配置中存在的参数，例如 "dataset.n_samples=20", "model.lr=0.01"
+        dtype: string
+        multiple: true
+        template: ' #{#{}}{ }'
+        value: []
+
+  - key: infer
+    name: 推理
+    desc: |
+      使用 RIFT-SVC 模型进行语音转换  
+      CFG相关参数可参考：[歌声转换SVC主流方法原理剖析2 — RIFT-SVC](https://www.cnblogs.com/Stareven233/p/19205182#classifier-free-guidance)
+    template: 
+      - 'cd "#{rift_dir}"'
+      - '& "#{python}" infer.py -n #{name} -i #{"#{in-files}"}{ } #{model}#{out-files}#{speaker}#{key-shift}#{infer-steps}#{device}#{use-fp16}#{ds-cfg-strength}#{cvec-downsample-rate}#{spk-cfg-strength}#{cfg-skip-layers}#{skip-cfg-strength}#{cfg-rescale}#{target-loudness}#{robust-f0}#{slicer-threshold}#{slicer-min-length}#{slicer-min-interval}#{slicer-hop-size}#{slicer-max-sil-kept}#{batch-size}#{fade-duration}#{restore-loudness}'
+    dynamicBind:
+      - from: *rift_exp_dir
+        fromRule: ~
+        to: name.options
+    arguments:
+      - key: name
+        name: 训练名
+        desc: 训练命名，常为所训练的角色名，用于拼接模型训练目录 rift_dir/exp/name 。若模型权重路径未输入，则自动到该目录下寻找最新迭代步数最大的权重
+        dtype: string
+        method: select
+        value: ~
+        required: true
+
+      - key: in-files
+        name: 输入音频文件
+        desc: 待转换的音频文件，支持多选
+        dtype: file
+        method: select
+        required: true
+        multiple: true
+        value: []
+
+      - key: model
+        name: 模型权重路径
+        desc: 模型检查点文件路径，为空时自动到 `训练命名` 拼接的目录下寻找最新检查点
+        dtype: file
+        method: select
+        value: ''
+        template: ' --model #{}'
+
+      - key: out-files
+        name: 输出音频文件
+        desc: 输出音频文件路径，数量与 `输入音频文件` 一致，且一一对应。为空时推理结果将生成在 `输入音频文件` 所在目录
+        dtype: file
+        method: select
+        multiple: true
+        value: []
+        template: ' -o #{}'
+
+      - key: speaker
+        name: 目标说话人
+        desc: 目标说话人 ID，为空时使用模型检查点里保存的第一个说话人
+        dtype: string
+        value: ~
+        multiple: true
+        template: '--speaker #{}'
+
+      - key: key-shift
+        name: 音高偏移
+        desc: 单位半音，正数升调，负数降调
+        dtype: number
+        method: slide
+        min: -12
+        max: 12
+        step: 1
+        value: 0
+        template: ' -k #{}'
+
+      - key: batch-size
+        name: 批处理大小
+        desc: 并行推理的批处理大小，理论上值越大越快。（但若切片数量少值又太大可能有反效果）
+        dtype: number
+        method: slide
+        min: 1
+        max: 32
+        step: 1
+        template: ' --batch-size #{}'
+
+      - key: infer-steps
+        name: 推理步数
+        desc: 推理步数
+        dtype: number
+        method: slide
+        min: 1
+        max: 64
+        step: 1
+        value: 32
+        template: ' --infer-steps #{}'
+
+      - key: device
+        name: 计算设备
+        desc: 推理设备，cuda 或 cpu，为空时优先使用cuda（若有）
+        dtype: string
+        method: radio
+        value: ~
+        options:
+          - cuda
+          - cpu
+        template: ' --device #{}'
+
+      - key: use-fp16
+        name: 使用半精度
+        desc: 使用 float16 精度以加快推理速度，使用cpu推理时不支持
+        dtype: boolean
+        method: switch
+        value: true
+        template: ' --use-fp16'
+
+      - key: ds-cfg-strength
+        name: 内容向量引导强度
+        desc: 增强对语义的控制，更高的值可以改善内容保留和咬字清晰度。过高会用力过猛。
+        dtype: number
+        method: slide
+        min: 0
+        max: 1
+        step: 0.01
+        value: 0.2
+        template: ' --ds-cfg-strength #{}'
+
+      - key: cvec-downsample-rate
+        name: 内容向量下采样率
+        desc: 搭配内容向量引导强度使用，控制下采样内容向量 cvec 构造无/差条件样本时的下采样率
+        dtype: number
+        method: input
+        value: 2
+        template: ' --cvec-downsample-rate #{}'
+
+      - key: spk-cfg-strength
+        name: 说话人引导强度
+        desc: 增强对说话人身份的控制，更高的值可以增强说话人相似度。过高可能导致音色失真。
+        dtype: number
+        method: slide
+        min: 0
+        max: 1
+        step: 0.01
+        value: 0.8
+        template: ' --spk-cfg-strength #{}'
+
+      - key: cfg-skip-layers
+        name: CFG跳过层
+        desc: 实验性功能。CFG目标增强层下标，可多选。使DiT推理遇到指定层数时跳过，以此构造无条件预测，增强指定层的效果
+        dtype: number
+        method: input
+        multiple: true
+        value: ~
+        template: ' --cfg-skip-layers #{}'
+
+      - key: skip-cfg-strength
+        name: 跳层引导强度
+        desc: 实验性功能。搭配CFG跳过层使用，增强指定层的效果，具体取决于所选层的功能。
+        dtype: number
+        method: slide
+        min: 0
+        max: 1
+        step: 0.01
+        value: 0.0
+        template: ' --skip-cfg-strength #{}'
+
+      - key: cfg-rescale
+        name: CFG重缩放
+        desc: 防止引导过饱和，约束整体引导强度。当引导效果过于强烈时使用调高该值。
+        dtype: number
+        method: slide
+        min: 0
+        max: 1
+        step: 0.01
+        value: 0.7
+        template: ' --cfg-rescale #{}'
+
+      - key: target-loudness
+        name: 目标响度
+        desc: 在推理前特征提取时，对输入音频的归一化目标响度 (LUFS)
+        dtype: number
+        method: slide
+        min: -30
+        max: 0
+        step: 1
+        value: -18.0
+        template: ' --target-loudness #{}'
+
+      - key: robust-f0
+        name: F0融合修正
+        desc: F0融合修正 (0=无，1=轻微，2=激进)。若启用将使用 rmvpe, pw, pmac 等音高提取方案分别提取F0，并通过中位数投票 + 趋势平滑 + 异常修正 + 缺失处理进行多源 F0 融合，显著提升 F0 轨迹的准确性和鲁棒性，特别适用于对 F0 质量敏感的歌声转换（SVC）系统
+        dtype: number
+        method: radio
+        value: ~
+        options: [0, 1, 2]
+        template: ' --robust-f0 #{}'
+
+      - key: slicer-threshold
+        name: 切片音量阈值
+        desc: 音频切片音量阈值，单位分贝，低于该值片段将被当做静音允许作为切分点，值越小切片数量越少
+        dtype: number
+        method: slide
+        min: -80
+        max: 0
+        step: 5
+        value: -40.0
+        template: ' --slicer-threshold #{}'
+
+      - key: slicer-min-length
+        name: 切片最小长度
+        desc: 音频片段最小长度 (毫秒)
+        dtype: number
+        method: input
+        value: 3000
+        template: ' --slicer-min-length #{}'
+
+      - key: slicer-min-interval
+        name: 切片最小间隔
+        desc: 音频片段间最小间隔 (毫秒)
+        dtype: number
+        method: input
+        value: 100
+        template: ' --slicer-min-interval #{}'
+
+      - key: slicer-hop-size
+        name: 切片帧移动间隔
+        desc: 单位毫秒。计算音频特征（音频切片计算rms）时滑动窗口每次滑动的距离，值越小，分析越精细，但计算量越大；值越大，计算快，但可能会漏掉细节
+        dtype: number
+        method: input
+        value: 10
+        template: ' --slicer-hop-size #{}'
+
+      - key: slicer-max-sil-kept
+        name: 切片最长保留静音
+        desc: 单位毫秒。对于长静音段，将在切分后最终片段两端各留下一小段静音，本参数限制了留下的静音最大长度。也就是说切静音，但不要切得太干净
+        dtype: number
+        method: input
+        value: 200
+        template: ' --slicer-max-sil-kept #{}'
+
+      - key: fade-duration
+        name: 淡入淡出时长
+        desc: 单位毫秒。淡入淡出时长
+        dtype: number
+        method: input
+        value: 20.0
+        template: ' --fade-duration #{}'
+
+      - key: restore-loudness
+        name: 恢复原始响度
+        desc: 将输出响度恢复到输入音频的原始水平
+        dtype: boolean
+        method: switch
+        value: true
+        template: ' --restore-loudness #{}'
+
+  - key: tensorboard
+    name: tensorboard
+    desc: 启动tensorboard，并自行打开页面：[http://localhost:6006/](http://localhost:6006/)
+    template: 
+      - 'Start-Process powershell -ArgumentList "-Command", "cd #{rift_dir}; #{python} -m tensorboard.main --logdir #{rift_exp_dir}"'
+      - 'Start-Process http://localhost:6006/'

@@ -95,6 +95,18 @@
   margin: 0.5em 0;
 }
 
+.n-markdown ul {
+  list-style-type: disc;
+}
+
+.n-markdown ol {
+  list-style-type: decimal;
+}
+
+.n-markdown li {
+  margin: 0.25em 0;
+}
+
 .n-markdown hr {
   border: none;
   border-top: 1px solid var(--n-markdown-hr);

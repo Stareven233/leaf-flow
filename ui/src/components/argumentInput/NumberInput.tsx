@@ -1,32 +1,64 @@
-import { type Component } from 'solid-js'
+import { type Component, createSignal, createEffect } from 'solid-js'
 import { inputClass } from './innerStyles'
 import type { ArgumentInputProps } from './types'
 import NButton from '../common/NButton'
 import { FilledPlusIcon, FilledMinusIcon, FilledDeleteIcon } from '@/components/common/Icons'
 
 const NumberInput: Component<ArgumentInputProps> = (props) => {
+  const [localValue, setLocalValue] = createSignal<number | undefined>(
+    props.argument.value == null ? undefined : Number(props.argument.value),
+  )
+
+  createEffect(() => {
+    const externalValue = props.argument.value == null ? undefined : Number(props.argument.value)
+    setLocalValue(externalValue)
+  })
+
   const numberValue = () => {
-    return props.argument.value == null ? 0 : Number(props.argument.value)
+    return localValue() == null ? 0 : localValue()!
   }
 
   const normedValue = (v: number) =>
     Math.min(props.argument.max ?? Infinity, Math.max(props.argument.min ?? -Infinity, v))
 
+  const commitValue = (value: number | undefined) => {
+    props.setArgument({ value })
+  }
+
   const handleChange = (sign: number) => {
     const step = props.argument.step ?? 1
     const newValue = numberValue() + step * sign
-    props.setArgument({ value: normedValue(newValue) })
+    const normed = normedValue(newValue)
+    setLocalValue(normed)
+    commitValue(normed)
   }
 
   const handleInput = (e: InputEvent) => {
     const target = e.target as HTMLInputElement
-    props.setArgument({ value: Number(target.value) })
+    const newValue = target.value === '' ? undefined : Number(target.value)
+    setLocalValue(newValue)
   }
 
-  const handleBlur = () => props.setArgument({ value: normedValue(numberValue()) })
+  const handleBlur = () => {
+    if (localValue() === undefined) {
+      commitValue(undefined)
+      return
+    }
+    const normed = normedValue(numberValue())
+    setLocalValue(normed)
+    commitValue(normed)
+  }
+
+  const handleKeyDown = (e: KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      const target = e.target as HTMLInputElement
+      target.blur()
+    }
+  }
 
   const handleClear = () => {
-    props.setArgument({ value: 0 })
+    setLocalValue(undefined)
+    commitValue(undefined)
   }
 
   return (
@@ -35,9 +67,10 @@ const NumberInput: Component<ArgumentInputProps> = (props) => {
         <input
           type="number"
           name="number-input"
-          value={numberValue()}
+          value={localValue() === undefined ? '' : localValue()}
           onInput={handleInput}
           onBlur={handleBlur}
+          onKeyDown={handleKeyDown}
           min={props.argument.min}
           max={props.argument.max}
           placeholder="输入数字"
@@ -69,7 +102,7 @@ const NumberInput: Component<ArgumentInputProps> = (props) => {
         </NButton>
 
         {}
-        {!props.argument.required && props.argument.value && (
+        {localValue() !== undefined && (
           <NButton
             variant="custom"
             onClick={handleClear}

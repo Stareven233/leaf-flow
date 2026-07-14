@@ -6,6 +6,7 @@ import NMarkdown from '@/components/common/NMarkdown'
 import type { ArgumentValue, ArgumentDType, ArgumentMethod, Argument } from '@/types/project'
 import { useDecodedParams } from '@/utils/hooks/useDecodedParams'
 import { useScroll } from '@/utils/hooks/useScroll'
+import dBind from '@/utils/dynamicBind'
 
 const ProjectConfig: Component = () => {
   const params = useDecodedParams()
@@ -13,10 +14,52 @@ const ProjectConfig: Component = () => {
   const projectStore = useProjectStore()
   const project = () => projectStore.get(params.project!)
 
+  const handleSetMeta = (key: string, updates: Partial<Argument>) => {
+    const proj = project()
+    if (!proj?.meta) {
+      return
+    }
+    const pkey = params.project!
+
+    for (const [k, v] of Object.entries(updates)) {
+      projectStore.set(pkey, 'meta', key, k as keyof Argument, v as any)
+    }
+
+    const changedKeys = Object.keys(updates)
+    if (changedKeys.length > 0) {
+      for (let mIndex = 0; mIndex < proj.modules.length; mIndex++) {
+        const mobj = proj.modules[mIndex]
+        const cacheKey = dBind.uniqueKey('P', pkey, mobj.key)
+
+        const setFunc = projectStore.set.bind(null, pkey, 'modules', mIndex, 'arguments')
+
+        const virtualArg = { key } as any
+        const latestProj = project()
+        dBind.update(cacheKey, setFunc, mobj, virtualArg, changedKeys, latestProj?.meta)
+      }
+    }
+  }
+
   const updateMeta = (key: string, val: Argument) => {
     const proj = project()
-    if (proj && proj.meta) {
-      projectStore.set(params.project!, 'meta', key, val)
+    if (!proj?.meta) {
+      return
+    }
+    const oldValue = proj.meta[key]
+
+    const updates: Partial<Argument> = {}
+    if (oldValue) {
+      for (const k of Object.keys(val) as (keyof Argument)[]) {
+        if (val[k] !== oldValue[k]) {
+          updates[k] = val[k] as any
+        }
+      }
+    } else {
+      Object.assign(updates, val)
+    }
+
+    if (Object.keys(updates).length > 0) {
+      handleSetMeta(key, updates)
     }
   }
 
