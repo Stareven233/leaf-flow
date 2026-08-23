@@ -1,0 +1,180 @@
+name: powershell妙妙小工具
+desc: 使用 PowerShell 的一组便利命令集合
+
+modules:
+  - key: link
+    name: 创建链接
+    shell: powershell
+    template: |
+      $linkName = "#{linkName}"
+      $linkNameFixed = if ($linkName -eq "") { Split-Path -Leaf "#{source}" } else { $linkName }
+      New-Item -ItemType #{linkType} -Path "#{target}\$linkNameFixed" -Target "#{source}"#{force}
+
+    dynamicBind:
+      - from: '#{pathType.value}'
+        to: source.dtype
+    arguments:
+      - key: pathType
+        name: 路径类型
+        desc: 选择文件或目录，将联动切换源路径的选择器。
+        dtype: string
+        method: radio
+        options: ['file', 'directory']
+        value: file
+        required: true
+      - key: linkType
+        name: 链接类型
+        desc: SymbolicLink文件或目录都可以，但必须以管理员权限执行，Junction只能用于目录，不用管理员权限。注意Junction 是 NTFS 目录重解析点，不能指向文件
+        dtype: string
+        method: radio
+        options: ['SymbolicLink', 'Junction']
+        value: SymbolicLink
+        required: true
+      - key: source
+        name: 源路径
+        desc: 实际文件或目录的路径
+        dtype: file
+        required: true
+      - key: target
+        name: 目标目录
+        desc: 链接放置在哪个目录下
+        dtype: directory
+        required: true
+      - key: linkName
+        name: 链接名称
+        desc: 链接的文件名/目录名，一般与源路径末尾名称一致。默认为源文件名
+        dtype: string
+        required: false
+      - key: force
+        name: 强制覆盖
+        desc: 同名路径已存在时覆盖
+        dtype: boolean
+        value: false
+        template: ' -Force'
+
+  - key: icon
+    name: ico图标
+    desc: 将单张图片转换为指定尺寸的 ICO 图标
+    template: |
+      # 若 destDir 未显式传入，则使用 srcPath 所在目录
+      if (-not "#{destDir}") {
+          $destDir = Split-Path #{srcPath} -Parent
+          if (-not $destDir) { $destDir = "." }
+      }
+
+      $base = [System.IO.Path]::GetFileNameWithoutExtension(#{srcPath})
+      $destPath = Join-Path $destDir "${base}-#{targetSize}.ico"
+
+      # 1. 读取图片并调整为目标尺寸
+      Add-Type -AssemblyName System.Drawing
+      $srcImg = [System.Drawing.Image]::FromFile(#{srcPath})
+
+      $bmp = New-Object System.Drawing.Bitmap(#{targetSize}, #{targetSize})
+      $gfx = [System.Drawing.Graphics]::FromImage($bmp)
+      $gfx.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+      $gfx.DrawImage($srcImg, 0, 0, #{targetSize}, #{targetSize})
+
+      # 2. 将图片转为内存中的 PNG 字节流 (保留全彩和透明度)
+      $ms = New-Object System.IO.MemoryStream
+      $bmp.Save($ms, [System.Drawing.Imaging.ImageFormat]::Png)
+      $imgBytes = $ms.ToArray()
+
+      # 3. 手动构建 ICO 文件头 (二进制写入)
+      $fs = [System.IO.File]::OpenWrite($destPath)
+      $bw = [System.IO.BinaryWriter]::new($fs)
+
+      # ICO Header (6 bytes)
+      $bw.Write([UInt16]0)    # Reserved (0)
+      $bw.Write([UInt16]1)    # Type (1 = ICO)
+      $bw.Write([UInt16]1)    # Count (1 image)
+
+      # Directory Entry (16 bytes)
+      $bw.Write([Byte]0)      # Width (0 = 256px)
+      $bw.Write([Byte]0)      # Height (0 = 256px)
+      $bw.Write([Byte]0)      # Color count (0 = >8bpp)
+      $bw.Write([Byte]0)      # Reserved
+      $bw.Write([UInt16]1)    # Color planes (1)
+      $bw.Write([UInt16]32)   # Bits per pixel (32)
+      $bw.Write([UInt32]$imgBytes.Length) # Size of image data
+      $bw.Write([UInt32]22)   # Offset (6 + 16 = 22)
+
+      # Image Data (PNG bytes)
+      $bw.Write($imgBytes)
+
+      # 4. 清理关闭
+      $bw.Close()
+      $fs.Close()
+      $gfx.Dispose()
+      $bmp.Dispose()
+      $srcImg.Dispose()
+
+      Write-Host "成功！已生成全彩透明图标: $destPath"
+
+    arguments:
+      - key: srcPath
+        name: 源图片
+        desc: 输入的 PNG 图片路径
+        dtype: file
+        method: select
+        dir: D:\t
+        required: true
+        template: '"#{}"'
+
+      - key: targetSize
+        name: 图标尺寸
+        desc: 生成图标的目标像素尺寸（正方形，默认 256）
+        dtype: number
+        method: slide
+        value: 256
+        min: 16
+        max: 256
+        step: 16
+
+      - key: destDir
+        name: 输出目录
+        desc: 存放 ICO 文件的目录（留空则与源图片同目录）
+        dtype: directory
+        method: select
+        value: ""
+
+  - key: extract-audio
+    name: 从视频提取音频
+    shell: powershell
+    template: |
+      $videoFiles = @(#{videos})
+      $videoFiles | ForEach-Object {
+        if (Test-Path $_) {
+          $file = Get-Item $_
+          $targetDir = "#{output-dir}"
+          $targetDir = if ($targetDir) { $targetDir } else { $file.DirectoryName }
+          $outputPath = Join-Path "$targetDir" "$($file.BaseName)_audio.#{codec}"
+          ffmpeg -i $file.FullName -vn -c:a copy $outputPath
+        } else {
+          Write-Warning "未找到文件: $_"
+        }
+      }
+    arguments:
+      - key: videos
+        name: 输入视频
+        desc: 需要抽取音频的视频文件路径
+        dtype: file
+        method: select
+        multiple: true
+        dir: D:/t
+        required: true
+        template: '#{"#{}"}{, }'
+
+      - key: output-dir
+        name: 输出文件夹
+        desc: 抽取音频保存文件夹，为空则默认与输入视频同目录
+        dtype: directory
+        method: select
+        dir: D:/t
+
+      - key: codec
+        name: 音频格式
+        desc: 输出音频格式
+        dtype: string
+        method: radio
+        options: [m4a, aac, mp3, flac, wav]
+        value: m4a

@@ -1,8 +1,8 @@
-import { createSignal, createMemo, onMount, onCleanup, For, Show } from 'solid-js'
+import { createSignal, createMemo, createEffect, on, onMount, onCleanup, For, Show } from 'solid-js'
 import { useAppNavigate } from '@/utils/routes'
 import type { DirEntry } from '@/types/file'
 import Card from '@/components/view/LeafCard'
-import CardSection from '@/components/CardSection'
+import CardSection, { CARD_GRID_CLASS } from '@/components/CardSection'
 import ContextMenu from '@/components/ContextMenu'
 import { useProjectStore } from '@/stores/project'
 import { useFlowStore } from '@/stores/flow'
@@ -12,6 +12,7 @@ import { executeCommand } from '@/apis/execution'
 import { saveConfigMTime, loadConfigMTime } from '@/utils/execution'
 import { useConfigStore } from '@/stores/config'
 import { useLazyLoad } from '@/utils/hooks/useLazyLoad'
+import { useGridColumns } from '@/utils/hooks/useGridColumns'
 import * as constants from '@/utils/constants'
 import { isPinned, nextOpenMTime, matchName } from '@/utils/homeList'
 import { Search, X } from 'lucide-solid'
@@ -82,6 +83,47 @@ export default function HomeView() {
     }
     const q = activeQuery()
     return all.filter((n) => matchName(n, q, flowStore.get(n)?.name))
+  })
+
+  const gridProbe = useGridColumns()
+  const pageSize = createMemo(() => Math.max(1, gridProbe.columns() * constants.CARD_PAGE_ROWS))
+
+  const [projectPage, setProjectPage] = createSignal(1)
+  const [flowPage, setFlowPage] = createSignal(1)
+
+  const projectPageCount = createMemo(() =>
+    Math.max(1, Math.ceil(filteredProjectNames().length / pageSize())),
+  )
+  const flowPageCount = createMemo(() =>
+    Math.max(1, Math.ceil(filteredFlowNames().length / pageSize())),
+  )
+
+  const pagedProjectNames = createMemo(() => {
+    const start = (projectPage() - 1) * pageSize()
+    return filteredProjectNames().slice(start, start + pageSize())
+  })
+  const pagedFlowNames = createMemo(() => {
+    const start = (flowPage() - 1) * pageSize()
+    return filteredFlowNames().slice(start, start + pageSize())
+  })
+
+  createEffect(
+    on(activeQuery, () => {
+      setProjectPage(1)
+      setFlowPage(1)
+    }),
+  )
+  createEffect(() => {
+    const count = projectPageCount()
+    if (count < projectPage()) {
+      setProjectPage(count)
+    }
+  })
+  createEffect(() => {
+    const count = flowPageCount()
+    if (count < flowPage()) {
+      setFlowPage(count)
+    }
   })
 
   const [menuVisible, setMenuVisible] = createSignal(false)
@@ -303,6 +345,13 @@ export default function HomeView() {
   return (
     <div class="w-full my-auto flex flex-col gap-6">
       {}
+      <div
+        ref={gridProbe.ref}
+        aria-hidden="true"
+        class={`${CARD_GRID_CLASS} h-0 overflow-hidden`}
+      />
+
+      {}
       <div class="bg-white rounded-lg shadow px-4 py-3 flex flex-wrap items-center gap-3">
         <div class="relative flex-1 min-w-48 max-w-md">
           <Search
@@ -366,14 +415,18 @@ export default function HomeView() {
         noMatchText={`无匹配「${activeQuery()}」`}
         filterNoMatch={projectFilterNoMatch()}
         countLabel={projectCountLabel()}
+        pager={{ page: projectPage(), pageCount: projectPageCount(), onPage: setProjectPage }}
         sectionRef={(el) => {
           projectSectionEl = el
         }}
       >
-        <For each={filteredProjectNames()}>
+        <For each={pagedProjectNames()}>
           {(name) => (
             <Card
-              ref={(el) => projectLazy.registerRef(el, name)}
+              ref={(el) => {
+                projectLazy.registerRef(el, name)
+                onCleanup(() => projectLazy.unregisterRef(el))
+              }}
               name={name}
               data={projectStore.get(name)}
               error={projectLazy.isFailed(name)}
@@ -393,14 +446,18 @@ export default function HomeView() {
         noMatchText={`无匹配「${activeQuery()}」`}
         filterNoMatch={flowFilterNoMatch()}
         countLabel={flowCountLabel()}
+        pager={{ page: flowPage(), pageCount: flowPageCount(), onPage: setFlowPage }}
         sectionRef={(el) => {
           flowSectionEl = el
         }}
       >
-        <For each={filteredFlowNames()}>
+        <For each={pagedFlowNames()}>
           {(name) => (
             <Card
-              ref={(el) => flowLazy.registerRef(el, name)}
+              ref={(el) => {
+                flowLazy.registerRef(el, name)
+                onCleanup(() => flowLazy.unregisterRef(el))
+              }}
               name={name}
               data={flowStore.get(name)}
               error={flowLazy.isFailed(name)}

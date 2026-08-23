@@ -1,0 +1,67 @@
+name: HQ-SVC
+desc: &desc |
+  [HQ-SVC](https://github.com/ShawnPi233/HQ-SVC) ([fork](https://github.com/Stareven233/HQ-SVC)) is an efficient framework for high-quality zero-shot singing voice conversion (SVC) in low-resource scenarios. It achieves disentanglement of content and speaker features via a unified decoupled codec, and enhances synthesis quality through multi-feature fusion and progressive optimization.  
+  Official Repository of Paper: ["Towards High-Quality Zero-Shot Singing Voice Conversion in Low-Resource Scenarios"(AAAI 2026)](https://arxiv.org/abs/2511.08496)
+
+meta:
+  hq_dir:
+    dtype: directory
+    method: select|resolve
+    # value: &hq_dir ./library/HQ-SVC
+    value: &hq_dir D:/Code/projects/HQ-SVC
+  python:
+    dtype: file
+    method: select|resolve
+    # value: ./bin/venv-svc/Scripts/python.exe
+    value: D:/Code/projects/HQ-SVC/.venv/Scripts/python.exe
+
+modules:
+  - key: inference
+    name: 推理
+    desc: *desc
+    template:
+      - 'cd "#{hq_dir}"'
+      - '& "#{python}" inference.py --source #{source} #{target} #{output} #{key_shift} #{auto_f0}#{config}#{skip_model_sync}'
+    arguments:
+      - key: source
+        name: 源音频
+        dtype: file
+        method: select
+        required: true
+        template: '"#{}"'
+      - key: target
+        name: 目标参考音频
+        desc: 目标参考音频文件，据此提取目标说话人嵌入，支持最多20个。留空则使用源音频，即对输入音频进行超分辨率
+        dtype: file
+        method: select
+        multiple: true
+        template: ' --target #{"#{}"}{ }'
+      - key: output
+        name: 输出音频路径
+        desc: 为空时推理结果将生成在 `输入音频文件` 所在目录
+        dtype: file
+        method: select
+        template: ' --output #{}'
+      - key: key_shift
+        name: 移调（半音）
+        dtype: number
+        value: 0
+        template: ' --key-shift #{}'
+      - key: auto_f0
+        name: 自动 F0 移调
+        dtype: boolean
+        value: false
+        template: ' --auto-f0'
+      - key: config
+        name: 推理配置
+        desc: 默认采用configs/hq_svc_infer.yaml
+        dtype: file
+        method: select
+        value: ~
+        template: ' --config #{}'
+      - key: skip_model_sync
+        desc: 不再尝试下载模型权重，即便缺失
+        name: 跳过模型同步
+        dtype: boolean
+        value: false
+        template: ' --skip-model-sync'

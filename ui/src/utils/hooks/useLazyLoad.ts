@@ -17,6 +17,8 @@ interface LazyLoadOptions<T> {
 export interface LazyLoadReturn {
   registerRef: (el: HTMLDivElement, name: string) => void
 
+  unregisterRef: (el: HTMLDivElement) => void
+
   isFailed: (name: string) => boolean
 
   init: () => void
@@ -108,6 +110,14 @@ export function useLazyLoad<T>(options: LazyLoadOptions<T>): LazyLoadReturn {
     observer?.observe(el)
   }
 
+  const unregisterRef = (el: HTMLDivElement) => {
+    if (!elementMap.has(el)) {
+      return
+    }
+    elementMap.delete(el)
+    observer?.unobserve(el)
+  }
+
   const init = () => {
     observer = new IntersectionObserver(handleIntersect, {
       root: null,
@@ -124,6 +134,7 @@ export function useLazyLoad<T>(options: LazyLoadOptions<T>): LazyLoadReturn {
 
   return {
     registerRef,
+    unregisterRef,
     isFailed: (name) => failed().has(name),
     init,
     destroy,
