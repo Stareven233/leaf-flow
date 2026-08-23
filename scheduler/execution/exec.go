@@ -97,6 +97,10 @@ func InitExecutor(shell string) (IExecutor, error) {
 		ptyShell := strings.TrimSpace(cleanShell[len("pty:"):])
 		return newPtyExecutor(ctx, cancel, ptyShell)
 	}
+	if strings.HasPrefix(strings.ToLower(cleanShell), "new:") {
+		windowShell := strings.TrimSpace(cleanShell[len("new:"):])
+		return newNewWindowExecutor(ctx, cancel, windowShell)
+	}
 	if strings.EqualFold(cleanShell, "no") {
 		return newExecutor(ctx, cancel)
 	}

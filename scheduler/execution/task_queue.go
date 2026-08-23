@@ -149,9 +149,10 @@ func (q *TaskQueue) executeTask(task *Task) {
 	ResetMmap()
 
 	commands := ReplaceMmapMarker(task.Commands)
-	isPtyExecutor := false
-	if _, ok := q.executor.(*PtyExecutor); ok {
-		isPtyExecutor = true
+	isDeferredExecutor := false
+	switch q.executor.(type) {
+	case *PtyExecutor, *NewWindowExecutor:
+		isDeferredExecutor = true
 	}
 
 	for _, cmd := range commands {
@@ -164,7 +165,7 @@ func (q *TaskQueue) executeTask(task *Task) {
 			q.handleFailedTask(task, err)
 			break
 		}
-		if !isPtyExecutor {
+		if !isDeferredExecutor {
 			time.Sleep(600 * time.Millisecond)
 		}
 	}
