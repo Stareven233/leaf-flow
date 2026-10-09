@@ -4,7 +4,7 @@ import * as path from '@/utils/path'
 import type { ArgumentInputProps } from './types'
 import type { Argument, ArgumentMap, ArgumentValue } from '@/types/project'
 import NButton from '@/components/common/NButton'
-import { loadExecutedArguments, isEmpty } from '@/utils/execution'
+import { loadQueueArguments, isEmpty } from '@/utils/execution'
 import { inputClass } from './innerStyles'
 import NPopover from '@/components/common/NPopover'
 import { useDecodedParams } from '@/utils/hooks/useDecodedParams'
@@ -143,8 +143,8 @@ const PathInput: Component<ArgumentInputProps> = (props) => {
     const files = new Set<string>()
     const isFlow = !!params.flow
     const history = isFlow
-      ? loadExecutedArguments('flow', params.flow, params.branch)
-      : loadExecutedArguments('project', params.project, params.module)
+      ? loadQueueArguments('flow', params.flow, params.branch)
+      : loadQueueArguments('project', params.project, params.module)
 
     const extractFromMap = (map: ArgumentMap) => {
       const val = map[key]

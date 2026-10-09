@@ -11,6 +11,7 @@ interface ActionBarProps {
   isExecuting: boolean
   executionInfo: string
   previewCommands: string[]
+  onSaveRecord?: () => void
   onSave: () => void
   onClear: () => void
   onPreview: () => void
@@ -39,6 +40,15 @@ export default function ExecuteActionBar(props: ActionBarProps) {
         {}
         <div class="flex justify-between">
           <div class="flex justify-start gap-3">
+            <Show when={props.onSaveRecord}>
+              <NButton
+                onClick={props.onSaveRecord}
+                variant="secondary"
+                title="保存当前参数到记录队列"
+              >
+                保存
+              </NButton>
+            </Show>
             <NButton onClick={props.onSave} variant="secondary">
               暂存
             </NButton>

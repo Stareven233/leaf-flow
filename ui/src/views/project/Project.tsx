@@ -11,6 +11,7 @@ import { useCommandExecution } from '@/utils/hooks/useCommandExecution'
 import { useTemporaryArguments } from '@/utils/hooks/useTemporaryArguments'
 import ExecuteActionBar from '@/components/ExecuteActionBar'
 import { NMarkdown } from '@/components/common/NMarkdown'
+import { useMessage } from '@/utils/hooks/useMessage'
 import dBind from '@/utils/dynamicBind'
 
 function useModuleExecution(getProject: () => Project | undefined, getModule: () => Module | null) {
@@ -46,9 +47,7 @@ function useModuleExecution(getProject: () => Project | undefined, getModule: ()
     const rawMap = exec.fromRenderMap(rmap, 'rawValue')
     exec.saveTemporaryArgument('project', project.key, mod.key, rawMap)
 
-    await cmdExec.execute(commands, mod.shell || 'auto', () => {
-      exec.saveExecutedArgument('project', project.key, mod.key, rawMap)
-    })
+    await cmdExec.execute(commands, mod.shell || 'auto')
   }
 
   return {
@@ -176,6 +175,26 @@ export default function ProjectView() {
     dBind.update(key, _set, mobj, aobj, Object.keys(updates), project.meta)
   }
 
+  const message = useMessage()
+
+  const handleSaveRecord = () => {
+    const project = getProject()
+    const mod = getModule()
+    if (!project || !mod) return
+
+    const rmap = exec.gatherArgumentStatus(mod.arguments || [], project.meta, false)
+    const rawMap = exec.fromRenderMap(rmap, 'rawValue')
+
+    exec.saveTemporaryArgument('project', project.key, mod.key, rawMap)
+
+    const res = exec.saveQueueArgument('project', project.key, mod.key, rawMap)
+    if (!res.saved && res.reason === 'duplicate') {
+      message.info('参数未变更，已存在相同保存记录喵')
+    } else if (res.saved) {
+      message.success('已保存参数记录喵')
+    }
+  }
+
   return (
     <div class="w-full mx-auto">
       <Show when={getProject()}>{(project) => <ProjectHeader project={project()} />}</Show>
@@ -210,6 +229,7 @@ export default function ProjectView() {
         isExecuting={isExecuting()}
         executionInfo={executionInfo()}
         previewCommands={previewCommands()}
+        onSaveRecord={handleSaveRecord}
         onSave={saveTempArgs}
         onClear={clearTempArgs}
         onPreview={previewModule}

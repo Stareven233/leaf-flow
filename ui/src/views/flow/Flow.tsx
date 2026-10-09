@@ -17,6 +17,7 @@ import { NMarkdown } from '@/components/common/NMarkdown'
 import { useCommandExecution } from '@/utils/hooks/useCommandExecution'
 import { useScroll } from '@/utils/hooks/useScroll'
 import ExecuteActionBar from '@/components/ExecuteActionBar'
+import { useMessage } from '@/utils/hooks/useMessage'
 import dBind from '@/utils/dynamicBind'
 
 export default function FlowView() {
@@ -309,9 +310,30 @@ export default function FlowView() {
     shell = allNoShell ? 'no' : shell
     exec.saveTemporaryArgument('flow', flow.key, branch.key, rawMap)
 
-    await execute(commands, shell, () => {
-      exec.saveExecutedArgument('flow', flow.key, branch.key, rawMap)
+    await execute(commands, shell)
+  }
+
+  const message = useMessage()
+
+  const handleSaveRecord = () => {
+    const flow = getFlow()
+    const branch = getCurrentBranch()
+    if (!flow || !branch) return
+
+    const rawMap: Record<string, ArgumentMap> = {}
+    branch.modules.forEach((mod) => {
+      const rmap = exec.gatherArgumentStatus(mod.arguments || [], flow.meta, false)
+      rawMap[mod.key] = exec.fromRenderMap(rmap, 'rawValue')
     })
+
+    exec.saveTemporaryArgument('flow', flow.key, branch.key, rawMap)
+
+    const res = exec.saveQueueArgument('flow', flow.key, branch.key, rawMap)
+    if (!res.saved && res.reason === 'duplicate') {
+      message.info('参数未变更，已存在相同保存记录喵')
+    } else if (res.saved) {
+      message.success('已保存参数记录喵')
+    }
   }
 
   return (
@@ -414,6 +436,7 @@ export default function FlowView() {
         isExecuting={isExecuting()}
         executionInfo={executionInfo()}
         previewCommands={previewCommands()}
+        onSaveRecord={handleSaveRecord}
         onSave={saveTempArgs}
         onClear={clearTempArgs}
         onPreview={previewBranch}

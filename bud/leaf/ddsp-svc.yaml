@@ -1,0 +1,183 @@
+name: DDSP-SVC
+desc: Real-time end-to-end singing voice conversion system based on DDSP (Differentiable Digital Signal Processing)
+
+meta:
+  # ddsp-dir: &ddsp_dir F:\CODE\!projects\DDSP-SVC
+  # ddsp-dir: &ddsp_dir D:\Code\projects\DDSP-SVC
+  ddsp-dir: &ddsp_dir ./library/DDSP-SVC
+  ddsp_exp_dir: 
+    dtype: directory
+    method: select|resolve
+    value: &ddsp_exp_dir ./library/DDSP-SVC/exp
+  python:
+    dtype: file
+    method: select|resolve
+    # value: ./bin/venv-svc/Scripts/python.exe
+    value: ./bin/python-svc/python.exe
+
+modules:
+  - key: infer
+    name: Inference
+    desc: Run DDSP-SVC inference with the reflow model
+    template: 
+      - 'cd #{ddsp-dir}'
+      - '$env:PYTHONPATH = "#{ddsp-dir}"'
+      - '#{python} main_reflow.py -n "#{name}" #{input} #{key} #{formant_shift_key} #{vocal_register_shift_key} #{spk_mix_dict} #{model_ckpt} #{device} #{output} #{spk_id} #{pitch_extractor} #{f0_min} #{f0_max} #{threshold} #{infer_step} #{method} #{t_start}'
+    dynamicBind:
+      - from: *ddsp_exp_dir
+        fromRule: ~
+        to: name.options
+    arguments:
+      # ── 必填参数 ──────────────────────────────────
+      - key: name
+        name: Experiment Name
+        desc: Name for this experiment
+        dtype: string
+        method: select
+        options: ~
+        required: true
+
+      - key: input
+        name: Input Audio
+        desc: Path to input audio file(s) or directory
+        dtype: file
+        method: select
+        required: true
+        multiple: true
+        template: ' -i #{"#{}"}{ }'
+
+      # ── 核心调参 ──────────────────────────────────
+      - key: key
+        name: 变调
+        desc: Key change (单位半音)
+        dtype: number
+        method: slide
+        value: 0
+        min: -12
+        max: 12
+        step: 1
+        template: ' -k #{}'
+
+      - key: formant_shift_key
+        name: 共振峰偏移
+        desc: 共振峰偏移量 (单位半音) (only for pitch-augmented model)
+        dtype: number
+        value: 0
+        template: ' -f #{}'
+
+      - key: vocal_register_shift_key
+        name: 音区偏移
+        desc: 音区偏移量 (单位半音)，只对 pc 声码器有效。输入正值表示先降低（音高调整指定的）目标 key 推理再让声码器升回来。
+        dtype: number
+        method: slide
+        min: -12
+        max: 12
+        step: 1
+        value: 0
+        template: ' -v #{}'
+
+      - key: spk_mix_dict
+        name: 说话人融合
+        desc: "多说话人字典, e.g. {1:0.8,2:0.2}"
+        dtype: string
+        value: ~
+        template: ' -mix "#{}"'
+
+      # ── 可选参数 ──────────────────────────────────
+      - key: model_ckpt
+        name: Model Checkpoint
+        desc: Path to model checkpoint (auto-select newest if unset)
+        dtype: file
+        method: select
+        dir: *ddsp_dir
+        value: ~
+        template: ' -m "#{}"'
+
+      - key: output
+        name: Output Audio
+        desc: Path to output audio file(s) (only when input is not a directory)
+        dtype: file
+        method: select
+        multiple: true
+        value: ~
+        template: ' -o #{"#{}"}{ }'
+
+      - key: device
+        name: Device
+        desc: Computing device (auto if unset)
+        dtype: string
+        method: select
+        options: [cpu, cuda]
+        value: ~
+        template: ' -d #{}'
+
+      - key: spk_id
+        name: 说话人id
+        desc: Speaker ID for multi-speaker model
+        dtype: number
+        value: 1
+        min: 1
+        template: ' -id #{}'
+
+      - key: pitch_extractor
+        name: F0 提取算法
+        desc: Pitch extractor algorithm
+        dtype: string
+        method: radio
+        options: [rmvpe, parselmouth, dio, harvest, crepe, fcpe]
+        value: rmvpe
+        template: ' -pe #{}'
+
+      - key: f0_min
+        name: 最小F0 (Hz)
+        desc: Minimum fundamental frequency
+        dtype: number
+        value: 50
+        min: 1
+        template: ' -fmin #{}'
+
+      - key: f0_max
+        name: 最大F0 (Hz)
+        desc: Maximum fundamental frequency
+        dtype: number
+        value: 1100
+        min: 1
+        template: ' -fmax #{}'
+
+      - key: threshold
+        name: 静音门限 (dB)
+        desc: 音量阈值，单位分贝，低于该值片段将被当做静音
+        dtype: number
+        method: slide
+        min: -80
+        max: 0
+        step: 5
+        value: -60
+        template: ' -th #{}'
+
+      - key: infer_step
+        name: 采样步数
+        desc: 默认auto，可填入数字指定步数
+        dtype: string
+        value: auto
+        template: ' -step #{}'
+
+      - key: method
+        name: 采样方法
+        desc: 'euler or rk4 | default: auto'
+        dtype: string
+        method: select
+        options: ['auto', 'euler', 'rk4']
+        value: 'auto'
+        template: ' -method #{}'
+
+      - key: t_start
+        name: reflow开始时间步
+        desc: Starting time parameter (0.0 to 1.0)
+        dtype: number
+        method: slide
+        value: 0
+        min: 0
+        max: 1
+        step: 0.01
+        template: ' -ts #{}'

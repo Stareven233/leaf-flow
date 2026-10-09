@@ -1,5 +1,5 @@
 import { Component, createSignal, onMount, onCleanup, Index, For } from 'solid-js'
-import { loadExecutedArguments, clearExecutedArgument } from '@/utils/execution'
+import { loadQueueArguments, clearQueueArgument } from '@/utils/execution'
 import type { SavedArgument, EntryType, ArgumentMap } from '@/types/project'
 import NButton from '@/components/common/NButton'
 import { useProjectStore } from '@/stores/project'
@@ -22,7 +22,7 @@ const ExecutionHistoryDropdown: Component<ExecutionHistoryDropdownProps> = (prop
   const unifiedStore = props.type === 'flow' ? useFlowStore() : useProjectStore()
 
   const refresh = () => {
-    const all = loadExecutedArguments(props.type, props.key)
+    const all = loadQueueArguments(props.type, props.key)
     const pending = pendingDeletes()
     setHistoryItems(all.filter((i) => !pending.has(i.index)))
   }
@@ -55,7 +55,7 @@ const ExecutionHistoryDropdown: Component<ExecutionHistoryDropdownProps> = (prop
     deleteTimeout = setTimeout(() => {
       const currentPending = pendingDeletes()
       if (currentPending.size > 0) {
-        clearExecutedArgument(Array.from(currentPending))
+        clearQueueArgument(props.type, props.key, Array.from(currentPending))
         setPendingDeletes(new Set<number>())
       }
       deleteTimeout = null
@@ -63,8 +63,7 @@ const ExecutionHistoryDropdown: Component<ExecutionHistoryDropdownProps> = (prop
   }
 
   const clearAll = () => {
-    const indices = loadExecutedArguments(props.type, props.key).map((i) => i.index)
-    clearExecutedArgument(indices)
+    clearQueueArgument(props.type, props.key)
     refresh()
   }
 
@@ -103,6 +102,19 @@ const ExecutionHistoryDropdown: Component<ExecutionHistoryDropdownProps> = (prop
 
   onMount(() => {
     refresh()
+    const handleUpdate = (e: Event) => {
+      const customEvent = e as CustomEvent<{ type?: string; key?: string }>
+      if (
+        !customEvent.detail ||
+        (customEvent.detail.type === props.type && customEvent.detail.key === props.key)
+      ) {
+        refresh()
+      }
+    }
+    window.addEventListener('saved-arguments-updated', handleUpdate)
+    onCleanup(() => {
+      window.removeEventListener('saved-arguments-updated', handleUpdate)
+    })
   })
 
   onCleanup(() => {
@@ -110,7 +122,7 @@ const ExecutionHistoryDropdown: Component<ExecutionHistoryDropdownProps> = (prop
       clearTimeout(deleteTimeout)
       const currentPending = pendingDeletes()
       if (currentPending.size > 0) {
-        clearExecutedArgument(Array.from(currentPending))
+        clearQueueArgument(props.type, props.key, Array.from(currentPending))
       }
     }
   })
@@ -123,7 +135,7 @@ const ExecutionHistoryDropdown: Component<ExecutionHistoryDropdownProps> = (prop
     >
       <NButton variant="secondary">
         <ClockIcon class="mr-2" />
-        执行历史 ({historyItems().length})
+        保存记录 ({historyItems().length})
       </NButton>
 
       {}
