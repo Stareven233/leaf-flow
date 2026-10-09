@@ -1,3 +1,5 @@
+//go:generate goversioninfo -64 -o resource.syso resource/versioninfo.json
+
 package main
 
 import (
@@ -33,7 +35,8 @@ func main() {
 	defer stopConsoleBridge()
 
 	app := fiber.New(fiber.Config{
-		AppName: "Leaf",
+		AppName:   "Leaf",
+		BodyLimit: 100 * 1024 * 1024,
 	})
 	fiberConfig := fiber.ListenConfig{DisableStartupMessage: true}
 

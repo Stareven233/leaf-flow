@@ -213,6 +213,19 @@ modules:
         multiple: true
         value: []
 
+      - key: upload_file
+        name: 拖动上传
+        desc: 使用拖动上传
+        method: upload
+        multiple: true
+        dtype: file
+
+      - key: mixed_file
+        name: 混合上传
+        desc: 使用混合上传
+        method: select|upload|mmap
+        dtype: file
+
       - key: mmap_file
         name: 内存映射
         desc: 使用内存映射

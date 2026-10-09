@@ -150,9 +150,9 @@ export const MetaSection: Component<MetaSectionProps> = (props) => {
       </div>
 
       {}
-      <div class="border-t border-gray-100 pt-4 mt-4 keep-all">
+      <div class="border-t border-gray-100 pt-4 mt-4">
         <h4 class="text-sm font-medium text-gray-700 mb-3">{props.addTitle}</h4>
-        <div class="flex gap-2 items-end list-none">
+        <div class="flex gap-2 items-end">
           <div class="w-48">
             <label class="block text-xs text-gray-500 mb-1">键</label>
             <input
@@ -194,7 +194,7 @@ export const MetaSection: Component<MetaSectionProps> = (props) => {
               onChange={(e) =>
                 setDraftMethod((e.currentTarget.value as ArgumentMethod) || undefined)
               }
-              class={`${newInputClass} bg-white xl:z-4000`}
+              class={`${newInputClass} bg-white`}
             >
               <option value="">默认</option>
               <For each={methodOptions}>

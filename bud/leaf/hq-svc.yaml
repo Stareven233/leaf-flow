@@ -7,13 +7,14 @@ meta:
   hq_dir:
     dtype: directory
     method: select|resolve
-    # value: &hq_dir ./library/HQ-SVC
-    value: &hq_dir D:/Code/projects/HQ-SVC
+    value: &hq_dir ./library/HQ-SVC
+    # value: &hq_dir D:/Code/projects/HQ-SVC
   python:
     dtype: file
     method: select|resolve
     # value: ./bin/venv-svc/Scripts/python.exe
-    value: D:/Code/projects/HQ-SVC/.venv/Scripts/python.exe
+    # value: D:/Code/projects/HQ-SVC/.venv/Scripts/python.exe
+    value: ./bin/python-svc/python.exe
 
 modules:
   - key: inference
@@ -45,6 +46,10 @@ modules:
       - key: key_shift
         name: 移调（半音）
         dtype: number
+        method: slide
+        min: -12
+        max: 12
+        step: 1
         value: 0
         template: ' --key-shift #{}'
       - key: auto_f0

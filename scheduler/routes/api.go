@@ -43,6 +43,10 @@ var gconfig nconfig.Config
 func Register(router fiber.Router, config nconfig.Config) {
 	gconfig = config
 
+	if ttl := gconfig.GetUploadTTLDuration(); ttl > 0 {
+		go cleanExpiredUploads(getUploadRoot(), ttl)
+	}
+
 	router.Get("/ping", func(c fiber.Ctx) error {
 		return JSONResponse(c, true, "pong")
 	})

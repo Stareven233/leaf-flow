@@ -3,6 +3,8 @@ desc: |
   RIFT-SVC是一种基于Rectified Flow Transformer的歌声转换模型实现。我们测试了几种相对于基础Diffusion Transformer的架构和训练改进。  
   在线测试（七海Nana7mi）：[https://huggingface.co/spaces/Pur1zumu/RIFT-SVC-Nanami](https://huggingface.co/spaces/Pur1zumu/RIFT-SVC-Nanami)  
 meta:
+  # rift_dir: &rift_dir D:/Code/projects/RIFT-SVC
+  # rift_exp_dir: &rift_exp_dir D:/Code/projects/RIFT-SVC/exp
   rift_dir:
     dtype: directory
     method: select|resolve
@@ -14,7 +16,8 @@ meta:
   python:
     dtype: file
     method: select|resolve
-    value: ./bin/venv-svc/Scripts/python.exe
+    # value: ./bin/venv-svc/Scripts/python.exe
+    value: ./bin/python-svc/python.exe
 
 modules:
   - key: download-pretrain
@@ -335,7 +338,7 @@ modules:
       CFG相关参数可参考：[歌声转换SVC主流方法原理剖析2 — RIFT-SVC](https://www.cnblogs.com/Stareven233/p/19205182#classifier-free-guidance)
     template: 
       - 'cd "#{rift_dir}"'
-      - '& "#{python}" infer.py -n #{name} -i #{"#{in-files}"}{ } #{model}#{out-files}#{speaker}#{key-shift}#{infer-steps}#{device}#{use-fp16}#{ds-cfg-strength}#{cvec-downsample-rate}#{spk-cfg-strength}#{cfg-skip-layers}#{skip-cfg-strength}#{cfg-rescale}#{target-loudness}#{robust-f0}#{slicer-threshold}#{slicer-min-length}#{slicer-min-interval}#{slicer-hop-size}#{slicer-max-sil-kept}#{batch-size}#{fade-duration}#{restore-loudness}'
+      - '& "#{python}" infer.py -n #{name} #{-i "#{in-files}"}{ } #{model}#{out-files}#{speaker}#{key-shift}#{infer-steps}#{device}#{use-fp16}#{ds-cfg-strength}#{cvec-downsample-rate}#{spk-cfg-strength}#{cfg-skip-layers}#{skip-cfg-strength}#{cfg-rescale}#{target-loudness}#{robust-f0}#{slicer-threshold}#{slicer-min-length}#{slicer-min-interval}#{slicer-hop-size}#{slicer-max-sil-kept}#{batch-size}#{fade-duration}#{restore-loudness}'
     dynamicBind:
       - from: *rift_exp_dir
         fromRule: ~
@@ -580,3 +583,6 @@ modules:
     template: 
       - 'Start-Process powershell -ArgumentList "-Command", "cd #{rift_dir}; #{python} -m tensorboard.main --logdir #{rift_exp_dir}"'
       - 'Start-Process http://localhost:6006/'
+      # - 'cd "#{rift_dir}"'
+      # - '& "#{python}" -m tensorboard.main --logdir #{rift_exp_dir}'
+      # - Start-Process http://localhost:6006/

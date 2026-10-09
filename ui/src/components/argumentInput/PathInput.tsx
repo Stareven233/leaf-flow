@@ -8,15 +8,27 @@ import { loadExecutedArguments, isEmpty } from '@/utils/execution'
 import { inputClass } from './innerStyles'
 import NPopover from '@/components/common/NPopover'
 import { useDecodedParams } from '@/utils/hooks/useDecodedParams'
-import { DeleteIcon, FileIcon, QuestionIcon } from '@/components/common/Icons'
+import {
+  DeleteIcon,
+  FileIcon,
+  QuestionIcon,
+  UploadIcon,
+  CircleLoadingIcon,
+} from '@/components/common/Icons'
 import { useConfigStore } from '@/stores/config'
+import { uploadTempFiles } from '@/apis/file'
 
 const PathInput: Component<ArgumentInputProps> = (props) => {
   const [tempPath, setTempPath] = createSignal<string>('')
   const [showSelectOptions, setShowSelectOptions] = createSignal<boolean>(false)
   const [showFileBrowser, setShowFileBrowser] = createSignal<boolean>(false)
   const [historyFiles, setHistoryFiles] = createSignal<string[]>([])
+  const [isUploading, setIsUploading] = createSignal<boolean>(false)
+  const [uploadPercent, setUploadPercent] = createSignal<number>(0)
+  const [isDragging, setIsDragging] = createSignal<boolean>(false)
+  const [uploadError, setUploadError] = createSignal<string | null>(null)
   let fileInputBox: HTMLInputElement | undefined
+  let fileUploadInputRef: HTMLInputElement | undefined
 
   const params = useDecodedParams()
   const configStore = useConfigStore()
@@ -24,8 +36,11 @@ const PathInput: Component<ArgumentInputProps> = (props) => {
   const methods = createMemo(() => {
     const method = props.argument.method || ''
     return method
-      .split('|')
-      .map((m) => m.trim())
+      .split(/[|,]/)
+      .map((m) => {
+        const item = m.trim().toLowerCase()
+        return item === 'uplaod' ? 'upload' : item
+      })
       .filter(Boolean)
   })
 
@@ -43,8 +58,10 @@ const PathInput: Component<ArgumentInputProps> = (props) => {
   })
 
   const supportsMmap = () => props.argument.dtype === 'file' && methods().includes('mmap')
-  const supportsInput = () =>
+  const supportsSelect = () =>
     (methods().length === 0 || methods().includes('select')) && !isMmapEnabled()
+  const supportsUpload = () =>
+    props.argument.dtype === 'file' && methods().includes('upload') && !isMmapEnabled()
   const shouldResolvePath = () => methods().includes('resolve')
 
   const selectedPaths = createMemo(() => {
@@ -273,8 +290,99 @@ const PathInput: Component<ArgumentInputProps> = (props) => {
     setPathArgument({ dir: target.value })
   }
 
+  const handleUploadFiles = async (files: File[]) => {
+    if (files.length === 0) return
+    const filesToUpload = props.argument.multiple ? files : [files[0]]
+    setIsUploading(true)
+    setUploadPercent(0)
+    setUploadError(null)
+    try {
+      const paths = await uploadTempFiles(filesToUpload, (percent) => {
+        setUploadPercent(percent)
+      })
+      if (paths && paths.length > 0) {
+        await appendPaths(paths)
+      }
+    } catch (err: any) {
+      console.error('File upload failed:', err)
+      setUploadError(err?.message || '上传失败')
+    } finally {
+      setIsUploading(false)
+      setUploadPercent(0)
+    }
+  }
+
+  let dragCounter = 0
+
+  const handleDragEnter = (e: DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    dragCounter++
+    if (e.dataTransfer) {
+      e.dataTransfer.dropEffect = 'copy'
+    }
+    setIsDragging(true)
+  }
+
+  const handleDragOver = (e: DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (e.dataTransfer) {
+      e.dataTransfer.dropEffect = 'copy'
+    }
+    if (!isDragging()) {
+      setIsDragging(true)
+    }
+  }
+
+  const handleDragLeave = (e: DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    dragCounter--
+    if (
+      dragCounter <= 0 ||
+      (e.currentTarget && !(e.currentTarget as any).contains(e.relatedTarget as Node))
+    ) {
+      dragCounter = 0
+      setIsDragging(false)
+    }
+  }
+
+  const handleDrop = async (e: DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    dragCounter = 0
+    setIsDragging(false)
+    const dt = e.dataTransfer
+    if (dt && dt.files && dt.files.length > 0) {
+      const files = Array.from(dt.files)
+      await handleUploadFiles(files)
+    }
+  }
+
+  const handleFileInputChange = async (e: Event) => {
+    const target = e.target as HTMLInputElement
+    if (target.files && target.files.length > 0) {
+      const files = Array.from(target.files)
+      await handleUploadFiles(files)
+    }
+    target.value = ''
+  }
+
   return (
     <section>
+      {}
+      <Show when={supportsUpload()}>
+        <input
+          ref={fileUploadInputRef}
+          type="file"
+          multiple={props.argument.multiple}
+          class="hidden"
+          onChange={handleFileInputChange}
+        />
+      </Show>
+
+      {}
       <Show when={supportsMmap()}>
         <NPopover content={'启用表示采用临时文件进行数据读写（MMAP）\n常用于构建流中间步骤'}>
           <label class="flex items-center gap-2 my-2 text-sm text-gray-700 cursor-pointer select-none">
@@ -293,73 +401,156 @@ const PathInput: Component<ArgumentInputProps> = (props) => {
           </label>
         </NPopover>
       </Show>
-      <Show when={supportsInput()}>
-        <label class="w-full flex flex-row items-center gap-2 pb-1.5 text-sm font-medium text-gray-700">
-          当前目录:
-          <input
-            type="text"
-            name="currentdir-input"
-            value={props.argument.dir || ''}
-            onBlur={handleDirInput}
-            class={`${inputClass.replace('w-full px-3 py-2', '')} flex-1 text-sm text-gray-700 px-1`}
-          />
-        </label>
 
+      {}
+      <Show when={!isMmapEnabled()}>
         {}
-        <div class="flex gap-3">
-          <div class="relative flex-1">
+        <Show when={supportsSelect()}>
+          <label class="w-full flex flex-row items-center gap-2 pb-1.5 text-sm font-medium text-gray-700">
+            当前目录:
             <input
-              ref={fileInputBox}
-              name="path-input"
-              value={tempPath()}
-              onInput={(e) => setTempPath(e.currentTarget.value)}
               type="text"
-              placeholder={`输入${props.argument.dtype === 'file' ? '文件' : '目录'}路径`}
-              class={inputClass}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  handlePathInput()
-                }
-              }}
-              onFocus={() => setShowSelectOptions(true)}
-              onBlur={() => setShowSelectOptions(false)}
+              name="currentdir-input"
+              value={props.argument.dir || ''}
+              onBlur={handleDirInput}
+              class={`${inputClass.replace('w-full px-3 py-2', '')} flex-1 text-sm text-gray-700 px-1`}
             />
-
-            <Show when={showSelectOptions() && historyFiles().length > 0}>
-              <div
-                class="nscroll-bar pr-2 max-h-40 overflow-y-auto absolute top-10 p-1 space-y-1 z-10 w-full bg-white border border-gray-300 rounded-md shadow-md"
-                onMouseDown={(e) => e.preventDefault()}
-                style={{ 'padding-right': '0px' }}
-              >
-                <For each={historyFiles()}>
-                  {(file) => (
-                    <span
-                      class="px-3 py-2 text-sm text-gray-700 hover:bg-green-50 cursor-pointer rounded-md transition-colors block"
-                      onClick={() => handleFileSelect(file)}
-                    >
-                      {file}
-                    </span>
-                  )}
-                </For>
-              </div>
-            </Show>
-          </div>
+          </label>
 
           {}
-          <NButton
-            variant="custom"
-            onClick={() => setShowFileBrowser(true)}
-            class="px-3 py-2 text-white rounded-md text-sm bg-green-300 hover:bg-green-400"
+          <div
+            class="flex gap-3"
+            onDragEnter={supportsUpload() ? handleDragEnter : undefined}
+            onDragOver={supportsUpload() ? handleDragOver : undefined}
+            onDragLeave={supportsUpload() ? handleDragLeave : undefined}
+            onDrop={supportsUpload() ? handleDrop : undefined}
           >
-            <QuestionIcon />
-          </NButton>
-        </div>
+            <div class="relative flex-1">
+              <input
+                ref={fileInputBox}
+                name="path-input"
+                value={tempPath()}
+                onInput={(e) => setTempPath(e.currentTarget.value)}
+                type="text"
+                placeholder={
+                  supportsUpload()
+                    ? isDragging()
+                      ? '松开鼠标立即上传至临时目录'
+                      : '拖拽（客户端）文件进行上传 或 输入（服务端）目标路径'
+                    : `输入${props.argument.dtype === 'file' ? '文件' : '目录'}路径`
+                }
+                class={`${inputClass} ${isDragging() ? 'ring-2 ring-green-400 bg-green-50/60 placeholder-green-600' : ''}`}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    handlePathInput()
+                  }
+                }}
+                onFocus={() => setShowSelectOptions(true)}
+                onBlur={() => setShowSelectOptions(false)}
+                onDragEnter={supportsUpload() ? handleDragEnter : undefined}
+                onDragOver={supportsUpload() ? handleDragOver : undefined}
+                onDragLeave={supportsUpload() ? handleDragLeave : undefined}
+                onDrop={supportsUpload() ? handleDrop : undefined}
+              />
+
+              <Show when={!isDragging() && showSelectOptions() && historyFiles().length > 0}>
+                <div
+                  class="nscroll-bar pr-2 max-h-40 overflow-y-auto absolute top-10 p-1 space-y-1 z-10 w-full bg-white border border-gray-300 rounded-md shadow-md"
+                  onMouseDown={(e) => e.preventDefault()}
+                  style={{ 'padding-right': '0px' }}
+                >
+                  <For each={historyFiles()}>
+                    {(file) => (
+                      <span
+                        class="px-3 py-2 text-sm text-gray-700 hover:bg-green-50 cursor-pointer rounded-md transition-colors block"
+                        onClick={() => handleFileSelect(file)}
+                      >
+                        {file}
+                      </span>
+                    )}
+                  </For>
+                </div>
+              </Show>
+            </div>
+
+            {}
+            <Show when={supportsUpload()}>
+              <NButton
+                variant="custom"
+                onClick={() => fileUploadInputRef?.click()}
+                disabled={isUploading()}
+                class="px-3 py-2 text-white rounded-md text-sm bg-green-300 hover:bg-green-400"
+                title="从客户端上传文件至服务端临时目录"
+              >
+                <Show when={isUploading()} fallback={<UploadIcon />}>
+                  <CircleLoadingIcon class="animate-spin" />
+                </Show>
+              </NButton>
+            </Show>
+
+            {}
+            <NButton
+              variant="custom"
+              onClick={() => setShowFileBrowser(true)}
+              class="px-3 py-2 text-white rounded-md text-sm bg-green-300 hover:bg-green-400"
+              title="打开文件浏览器"
+            >
+              <QuestionIcon />
+            </NButton>
+          </div>
+        </Show>
+
+        {}
+        <Show when={!supportsSelect() && supportsUpload()}>
+          <div
+            class={`flex flex-col items-center justify-center border-2 border-dashed rounded-lg p-5 cursor-pointer transition-colors ${
+              isDragging()
+                ? 'border-green-500 ring-2 ring-green-200 bg-green-50'
+                : 'border-gray-300 hover:border-green-400 bg-gray-50/60 hover:bg-green-50/20'
+            }`}
+            onDragEnter={handleDragEnter}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            onClick={() => fileUploadInputRef?.click()}
+          >
+            <Show
+              when={isUploading()}
+              fallback={
+                <>
+                  <UploadIcon class="h-8 w-8 text-green-500 mb-2" />
+                  <p class="text-sm text-gray-700 font-medium">
+                    {isDragging() ? '松开鼠标立即上传' : '点击或拖拽文件至此处上传'}
+                  </p>
+                  <p class="text-xs text-gray-400 mt-1">
+                    {props.argument.multiple ? '支持多文件' : '单文件'}，自动存入服务端临时目录
+                  </p>
+                </>
+              }
+            >
+              <CircleLoadingIcon class="h-8 w-8 text-green-500 animate-spin mb-2" />
+              <p class="text-sm text-green-600 font-medium">正在上传中... {uploadPercent()}%</p>
+            </Show>
+          </div>
+        </Show>
+
+        {}
+        <Show when={isUploading() && supportsSelect()}>
+          <div class="flex items-center gap-2 mt-1.5 text-xs text-green-600">
+            <CircleLoadingIcon class="h-3.5 w-3.5 animate-spin" />
+            <span>正在上传至服务端临时目录... {uploadPercent()}%</span>
+          </div>
+        </Show>
+
+        {}
+        <Show when={uploadError()}>
+          <p class="mt-1 text-xs text-red-500">{uploadError()}</p>
+        </Show>
 
         {}
         <Show when={selectedPaths().length > 0}>
-          <div class="bg-gray-50 rounded-md p-3 mt-1">
+          <div class="bg-gray-50 rounded-md p-3 mt-2">
             <p class="text-sm font-medium text-gray-700 mb-2 flex items-center gap-1">
-              {}
               已选择{props.argument.dtype === 'file' ? '文件' : '目录'}: ({selectedPaths().length})
             </p>
             <ul class="nscroll-bar pr-2 space-y-1 max-h-32 overflow-y-auto">
@@ -383,15 +574,17 @@ const PathInput: Component<ArgumentInputProps> = (props) => {
         </Show>
 
         {}
-        <FileBrowser
-          currentDir={props.argument.dir || '.'}
-          onCurrentDirChange={(dir) => setPathArgument({ dir })}
-          visible={showFileBrowser()}
-          type={props.argument.dtype === 'directory' ? 'directory' : 'file'}
-          multiple={props.argument.multiple}
-          onCancel={() => setShowFileBrowser(false)}
-          onConfirm={handleFileBrowserConfirm}
-        />
+        <Show when={supportsSelect()}>
+          <FileBrowser
+            currentDir={props.argument.dir || '.'}
+            onCurrentDirChange={(dir) => setPathArgument({ dir })}
+            visible={showFileBrowser()}
+            type={props.argument.dtype === 'directory' ? 'directory' : 'file'}
+            multiple={props.argument.multiple}
+            onCancel={() => setShowFileBrowser(false)}
+            onConfirm={handleFileBrowserConfirm}
+          />
+        </Show>
       </Show>
     </section>
   )

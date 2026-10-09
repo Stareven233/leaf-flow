@@ -6,13 +6,15 @@ desc: |
   支持 GPU 加速、LoRA、TTA 和多格式输出。
 
 meta:
+  # msst_dir: D:\Code\projects\Music-Source-Separation-Training
+  # msst_config_dir: &msst_config_dir D:\Code\projects\Music-Source-Separation-Training\configs\merged
   msst_webui_dir: &webui_dir D:/Software/MSST WebUI
   msst_dir: &msst_dir ./library/msst
   msst_config_dir: &msst_config_dir ./library/msst/configs/merged
   python:
     dtype: file
     method: select|resolve
-    value: ./bin/venv-svc/Scripts/python.exe
+    value: ./bin/python-svc/python.exe
 
 modules:
   - key: infer

@@ -5,6 +5,9 @@ import (
 	"log"
 	"os"
 	"reflect"
+	"strconv"
+	"strings"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -21,6 +24,7 @@ type Config struct {
 	ProgressSampleGap float32 `yaml:"progressSampleGap" json:"progressSampleGap"`
 	MmapMarker        string  `yaml:"mmapMarker" json:"mmapMarker"`
 	MmapSize          float32 `yaml:"mmapSize" json:"mmapSize"`
+	UploadTTL         string  `yaml:"uploadTTL" json:"uploadTTL"`
 }
 
 var config Config
@@ -79,4 +83,32 @@ func (c *Config) PrintStartMessage() {
 	fmt.Println("--------------------------------------")
 	fmt.Printf("%s\t%v\n", "Author:", Color("獭栖八雫@space.bilibili.com/1610042298", Colors.ForestGreen))
 	fmt.Printf("%s\t%v\n", "Github:", Color("github.com/Stareven233", Colors.ForestGreen))
+}
+
+func ParseDuration(s string) (time.Duration, error) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return 0, nil
+	}
+	if strings.HasSuffix(s, "d") || strings.HasSuffix(s, "D") {
+		numStr := strings.TrimSpace(s[:len(s)-1])
+		days, err := strconv.ParseFloat(numStr, 64)
+		if err != nil {
+			return 0, fmt.Errorf("invalid day duration '%s': %w", s, err)
+		}
+		return time.Duration(days * float64(24*time.Hour)), nil
+	}
+	return time.ParseDuration(s)
+}
+
+func (c *Config) GetUploadTTLDuration() time.Duration {
+	if c.UploadTTL == "" {
+		return 0
+	}
+	dur, err := ParseDuration(c.UploadTTL)
+	if err != nil {
+		log.Printf("Warning: failed to parse uploadTTL '%s': %v, fallback to no-expiry", c.UploadTTL, err)
+		return 0
+	}
+	return dur
 }

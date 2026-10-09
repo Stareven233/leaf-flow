@@ -64,6 +64,64 @@ export const readFile = async (
   return null
 }
 
+export const uploadTempFiles = (
+  files: File[],
+  onProgress?: (percent: number) => void,
+): Promise<string[]> => {
+  return new Promise((resolve, reject) => {
+    if (files.length === 0) {
+      resolve([])
+      return
+    }
+
+    const url = `${API_BASE_KEY}/upload`
+    const formData = new FormData()
+    files.forEach((file) => {
+      formData.append('files', file)
+    })
+
+    const xhr = new XMLHttpRequest()
+    xhr.open('POST', url)
+
+    if (onProgress && xhr.upload) {
+      xhr.upload.onprogress = (event) => {
+        if (event.lengthComputable) {
+          const percent = Math.round((event.loaded / event.total) * 100)
+          onProgress(percent)
+        }
+      }
+    }
+
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try {
+          const resp = JSON.parse(xhr.responseText)
+          if (resp.success && Array.isArray(resp.data)) {
+            resolve(resp.data)
+            return
+          }
+          reject(new Error(resp.message || '上传失败'))
+        } catch (err) {
+          reject(err)
+        }
+      } else {
+        try {
+          const resp = JSON.parse(xhr.responseText)
+          reject(new Error(resp.message || `上传失败 (HTTP ${xhr.status})`))
+        } catch {
+          reject(new Error(`上传失败 (HTTP ${xhr.status})`))
+        }
+      }
+    }
+
+    xhr.onerror = () => {
+      reject(new Error('上传遇到网络错误'))
+    }
+
+    xhr.send(formData)
+  })
+}
+
 export const createEntry = async (
   path: string,
   isDir: boolean,

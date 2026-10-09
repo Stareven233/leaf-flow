@@ -227,3 +227,13 @@ export const CopyIcon = (props: IconProps) => {
     </>,
   )
 }
+
+export const UploadIcon = (props: IconProps) => {
+  return svg(
+    props,
+    <>
+      <path {...basePathProps} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1" />
+      <path {...basePathProps} d="M12 3v12m0-12l4 4m-4-4L8 7" />
+    </>,
+  )
+}

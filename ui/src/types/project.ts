@@ -2,7 +2,7 @@ export type OneOrMany<T> = T | T[]
 
 export type ArgumentValue = number | string | boolean
 export type ArgumentDType = 'string' | 'number' | 'file' | 'directory' | 'boolean'
-export type ArgumentMethod = 'input' | 'slide' | 'radio' | 'select' | 'mmap' | 'switch'
+export type ArgumentMethod = 'input' | 'slide' | 'radio' | 'select' | 'mmap' | 'switch' | 'upload'
 
 export interface Argument {
   key: string

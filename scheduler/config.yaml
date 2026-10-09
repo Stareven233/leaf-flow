@@ -1,5 +1,5 @@
 isDev: true
-version: 0.9.7+2
+version: 0.9.8
 host: localhost
 port: 23334
 # 相对于leaf.exe
@@ -13,3 +13,5 @@ mmapMarker: ?MMAP_FILE?
 mmapSize: 4
 # 设置则启用日志功能
 # logDir: ./temp/log
+# 上传临时文件过期清理时间，除 Go 标准时间单位（h、m、s）外扩充支持天数单位 d（如 "24h", "7d"），留空或0表示永不过期
+uploadTTL: 15d
